@@ -27,6 +27,14 @@ def test_supported_output_codecs(tmp_path):
         info=probe_video(output)
         assert info.frame_count==len(frames) and info.codec
 
+
+def test_repeated_tiny_h265_exports_avoid_native_heap_crash(tmp_path):
+    frames=[np.full((32,48,3),value,np.uint8) for value in (20,80,160,220,120)]
+    for index in range(8):
+        output=tmp_path/f"tiny{index}.mp4"
+        write_video(frames,output,12,codec="h265")
+        assert probe_video(output).frame_count==5
+
 def test_audio_track_is_preserved_and_reencoded(tmp_path):
     frames=[np.full((32,48,3),80,np.uint8) for _ in range(9)]
     silent=tmp_path/"silent.mp4"; write_video(frames,silent,12)

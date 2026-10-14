@@ -10,6 +10,8 @@ This is an initial inventory for optional dependencies and integrations. It is n
 | PyYAML | https://github.com/yaml/pyyaml | MIT | Not applicable |
 | Requests | https://github.com/psf/requests | Apache-2.0 | Not applicable |
 | OpenCV | https://github.com/opencv/opencv | Apache-2.0 (current upstream) | Not applicable |
+| PyAV | [PyAV 16.1.0 license](https://github.com/PyAV-Org/PyAV/blob/v16.1.0/LICENSE.txt) | BSD-3-Clause for bindings; bundled FFmpeg/codec libraries have separate notices and build-dependent LGPL/GPL terms | Not applicable |
+| psutil (test dependency) | https://github.com/giampaolo/psutil | BSD-3-Clause | Not applicable |
 | Gradio | https://github.com/gradio-app/gradio | Apache-2.0 | Not applicable |
 | FastAPI | https://github.com/fastapi/fastapi | MIT | Not applicable |
 | Uvicorn | https://github.com/encode/uvicorn | BSD-3-Clause | Not applicable |

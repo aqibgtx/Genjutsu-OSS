@@ -61,6 +61,15 @@ class ControlPackage:
     reference_strength: float = .8
     preservation_strength: float = 1.0
     settings: dict[str, Any] = field(default_factory=dict)
+    fps_rational: str = "0/1"
+    time_base: str = "1/1000000"
+    frame_pts: list[int] = field(default_factory=list)
+    frame_durations: list[int] = field(default_factory=list)
+    timestamps: list[float] = field(default_factory=list)
+    frame_indices: list[int] = field(default_factory=list)
+    source_frame_indices: list[int] = field(default_factory=list)
+    source_start_time: float = 0.0
+    is_vfr: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

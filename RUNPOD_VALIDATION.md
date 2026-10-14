@@ -60,3 +60,41 @@ python -m pip install -e '.[video,api,wan,pose]'
 Each suite fails with a nonzero exit code on missing assets/dependencies, unsupported APIs, model-load errors, non-finite outputs, timing/audio failures, or generation errors. `--suite all` runs the whole list and performs actual generation; it requires `--run-inference` and every listed model. It needs `source.mp4` to be a single-shot `4k+1` I2V clip. Supply a separate multi-shot clip in `source_multishot.mp4` (plus `mask_multishot/`) so the multi-shot test remains representative. Run suites individually first so failures identify the subsystem. Save the JSON stdout, console log, generated outputs, GPU model/VRAM, and exact checkpoint revision with the deployment validation report.
 
 These commands establish runtime and structural acceptance. Human review is still needed for task correctness, identity similarity thresholds, occlusion quality, temporal flicker, camera preservation, and visual artifacts; the suite does not convert a successful model call into a visual-quality claim.
+
+## Audit regression acceptance on real models
+
+The audit changes are CPU/media tested locally; model runtime, memory, revision loading, and mask reinitialization remain untested. Install `.[video,wan,test]` plus CUDA PyTorch and existing local model files. Use a fresh `audit-results/` directory for the following acceptance run. Prepare:
+
+```text
+/workspace/validation/audit/
+  source_vfr.mp4       # three detectable shots, genuinely varying PTS, AAC audio with a known delayed onset
+  source_ntsc.mp4      # three detectable shots, exactly 30000/1001 FPS, AAC audio
+  reference.png        # representative target image
+  reference_b.png      # different valid reference contents for same-path cache invalidation
+  mask_vfr/           # one frame-sized PNG per decoded VFR source frame
+  mask_ntsc/          # one frame-sized PNG per decoded NTSC source frame
+```
+
+Start with 17-81 frames per shot at 480p. Include target movement and partial occlusion. Supply a YAML config with `backend.type: wan_vace`, `backend.model_id` pointing to an existing Diffusers Wan 2.1 VACE directory, CUDA device/dtype, and an appropriate chunk size/overlap. No model downloads occur. Then run:
+
+```bash
+python scripts/validate_runpod_audit.py --assets-dir /workspace/validation/audit --config /workspace/config.local-vace.yaml --run-inference
+```
+
+This performs actual inference on both clips, repeats each run to require cache hits, changes one shot seed to require exactly one cache miss, and changes reference bytes at the same path to require all relevant shots to regenerate. It fails on model/API errors, OOM, missing frames, geometry changes, PTS drift beyond one container tick, endpoint drift, lost audio, audio-offset drift over 25 ms, incorrect cache reuse, or host RSS growth exceeding `--max-host-mib` (default 16384). It records measured host/GPU peaks and shot state in `audit-results/validation.json`. These limits are acceptance thresholds, not claims that a particular GPU fits the model.
+
+To verify actual revision loading, provide a second config pointing to a second already-installed, compatible VACE checkpoint with different real checkpoint contents:
+
+```bash
+python scripts/validate_runpod_audit.py --assets-dir /workspace/validation/audit --config /workspace/config.revision-a.yaml --revision-b-config /workspace/config.revision-b.yaml --run-inference
+```
+
+Use fresh audit results before rerunning. This additionally requires revision B to perform real generation and reject every stale shot cache. Merely changing a directory name or revision label fails the checkpoint-content prerequisite. Without revision B, the report explicitly records `revision_b_validated: false`.
+
+For bounded SAM 2 propagation, run the existing `selection` suite on a moving subject clip longer than 96 frames with `selection_frame: 40` and `selection_chunk_frames: 16` in its asset manifest. It requires local DINO/SAM2 checkpoints and official SAM 2. Inspect masks on both sides of the seed and all overlapping window boundaries; missing frames, lost/nonmatching identities, empty visible-target masks or discontinuities at boundaries fail acceptance. Fully occluded targets at a boundary may require reinitialization and are an explicit limitation, not a passing output. Repeat with a 1080p clip while monitoring RSS and GPU memory.
+
+For disk-backed Depth Anything normalization and framewise InsightFace evaluation, rerun the `depth` and `identity` suites with their local weights on a clip longer than 96 frames. Depth must return finite maps with shared clip normalization; identity must retain frame-aligned scores and detections. Confirm host memory does not grow by retaining whole decoded RGB/depth arrays. The CPU histogram normalization tests do not validate the learned depth model.
+
+For Wan Animate, rerun `wan-preprocess` and `wan-animate` on CFR, multi-shot subject footage within `backend.max_shot_frames`. Verify that every shot's four actual conditioning videos and generated output match its own frames and rate. VFR must fail before model inference with the explicit CFR requirement. Long Animate/I2V shots exceeding the configured frame limit must fail explicitly. Inspect quality at cuts and check the model's actual host/VRAM usage before increasing the limit.
+
+For ComfyUI, run the live `/object_info` and queue acceptance commands above after installing the updated PyAV requirement and restarting the custom nodes. Include the VFR source in VACE and CPU compositor/temporal workflows; saved video PTS and audio offset must match the source. ComfyUI IMAGE tensors and upstream server model memory remain outside the client's disk-backed memory guarantee.

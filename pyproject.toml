@@ -12,13 +12,13 @@ license = "Apache-2.0"
 dependencies = ["numpy>=1.24", "Pillow>=10,<12", "PyYAML>=6", "requests>=2.31"]
 
 [project.optional-dependencies]
-video = ["opencv-python>=4.9"]
+video = ["opencv-python>=4.9", "av>=16.1,<17"]
 ui = ["gradio>=4.0,<6"]
 api = ["fastapi>=0.110,<1", "uvicorn>=0.27,<1"]
-test = ["pytest>=8", "pytest-cov>=5"]
+test = ["pytest>=8", "pytest-cov>=5", "psutil>=5.9"]
 wan = ["diffusers==0.37.1", "transformers>=4.49,<5", "huggingface-hub>=0.34,<1", "accelerate>=1.1", "safetensors>=0.4"]
 pose = ["mediapipe>=0.10", "protobuf>=4.25.3,<5"]
-all = ["opencv-python>=4.9", "gradio>=4.0", "fastapi>=0.110", "uvicorn>=0.27", "pytest>=8", "pytest-cov>=5"]
+all = ["opencv-python>=4.9", "av>=16.1,<17", "gradio>=4.0,<6", "fastapi>=0.110", "uvicorn>=0.27", "pytest>=8", "pytest-cov>=5", "psutil>=5.9"]
 
 [project.scripts]
 genjutsu = "genjutsu.cli:main"

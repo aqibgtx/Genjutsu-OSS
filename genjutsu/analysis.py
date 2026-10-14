@@ -93,7 +93,7 @@ def grounded_detect(frames: list[np.ndarray], prompt: str, checkpoint: str, box_
         output.append({"frame":idx,"detections":[{"label":str(label),"score":float(score),"box":[float(x) for x in box]} for box,score,label in zip(parsed["boxes"],parsed["scores"],parsed["text_labels"])]})
     return output
 
-def depth_sequence(frames: list[np.ndarray], model: str = "none", checkpoint: str | None = None) -> list[np.ndarray]:
+def depth_sequence(frames: list[np.ndarray], model: str = "none", checkpoint: str | None = None, *, disk_backed=False) -> list[np.ndarray]:
     if model in ("none", "disabled"): raise RuntimeError("Learned depth is not configured. Set model=depth_anything and provide a local Transformers model directory.")
     if model not in ("depth_anything","depth-anything"): raise RuntimeError(f"Unsupported depth adapter {model}; supported local baseline is Transformers Depth Anything.")
     if not checkpoint: raise RuntimeError("Depth Anything weights must already exist locally; set depth.checkpoint. This adapter never downloads weights.")
@@ -103,15 +103,36 @@ def depth_sequence(frames: list[np.ndarray], model: str = "none", checkpoint: st
         from PIL import Image
     except ImportError as e: raise RuntimeError("Install PyTorch and Transformers to use Depth Anything.") from e
     processor=AutoImageProcessor.from_pretrained(checkpoint,local_files_only=True); model_obj=DepthAnythingForDepthEstimation.from_pretrained(checkpoint,local_files_only=True).eval()
-    device="cuda" if torch.cuda.is_available() else "cpu"; model_obj.to(device); outs=[]
+    from .frame_store import FrameStore
+    device="cuda" if torch.cuda.is_available() else "cpu"; model_obj.to(device); outs=FrameStore() if disk_backed else []
     with torch.inference_mode():
         for frame in frames:
             inputs=processor(images=Image.fromarray(frame),return_tensors="pt").to(device); pred=model_obj(**inputs).predicted_depth
             depth=torch.nn.functional.interpolate(pred.unsqueeze(1),size=frame.shape[:2],mode="bicubic",align_corners=False).squeeze().cpu().numpy().astype(np.float32)
             outs.append(depth)
+    if disk_backed:
+        return normalize_depth_store(outs.finish())
     # Normalize with shared clip percentiles, not independent per-frame normalization.
     vals=np.concatenate([d.ravel() for d in outs]); lo,hi=np.percentile(vals,[2,98]); scale=max(float(hi-lo),1e-6)
     return [np.clip((d-lo)/scale,0,1).astype(np.float32) for d in outs]
+
+
+def normalize_depth_store(maps):
+    """Shared clip percentiles from a bounded 4096-bin histogram, then disk output."""
+    from .frame_store import FrameStore
+    if not maps:
+        return FrameStore().finish()
+    lo=min(float(np.min(d)) for d in maps)
+    hi=max(float(np.max(d)) for d in maps)
+    if hi<=lo:
+        return FrameStore.from_frames(np.zeros_like(d,dtype=np.float32) for d in maps)
+    histogram=np.zeros(4096,np.int64)
+    for depth in maps:
+        histogram+=np.histogram(depth,bins=4096,range=(lo,hi))[0]
+    cdf=np.cumsum(histogram)
+    quantiles=[lo+(int(np.searchsorted(cdf,cdf[-1]*q))+.5)*(hi-lo)/4096 for q in (.02,.98)]
+    low,high=quantiles;scale=max(high-low,1e-6)
+    return FrameStore.from_frames(np.clip((d-low)/scale,0,1).astype(np.float32) for d in maps)
 
 def pose_sequence(frames: list[np.ndarray], model: str = "none", checkpoint: str | None = None) -> list[dict]:
     if model in ("none", "disabled"): raise RuntimeError("Pose extraction is not configured. Set pose.model=mediapipe or install/configure DWPose.")

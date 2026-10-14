@@ -3,8 +3,9 @@ from pathlib import Path
 import json
 import numpy as np
 from PIL import Image
-from genjutsu.video import probe_video, read_frames, write_video
+from genjutsu.video import probe_video, read_frames, write_video, timing_kwargs
 from genjutsu.analysis import scene_cuts, estimate_camera, optical_flow
+from genjutsu.frame_store import FrameStore
 from genjutsu.segmentation import SAM2Segmenter, mask_from_bbox, save_masks
 from genjutsu.tracking import propagate_mask_sequence
 from genjutsu.controls import ControlPackage, Operation, Reference
@@ -74,6 +75,7 @@ class GenjutsuControlPackage:
     def build(self,source_video,operation,prompt,references_json,preserve_json,output_path):
         v=probe_video(source_video); refs=[Reference(**r) for r in json.loads(references_json)]
         c=ControlPackage(source_video=v.path,fps=v.fps,width=v.width,height=v.height,frame_count=v.frame_count,duration=v.duration,audio_metadata=v.audio_metadata or {},operation=Operation(operation),prompt=prompt)
+        c.fps_rational=v.fps_rational;c.time_base=v.time_base;c.frame_pts=v.frame_pts;c.frame_durations=v.frame_durations;c.timestamps=v.timestamps;c.source_start_time=v.start_time;c.is_vfr=v.is_vfr
         c.references.references=refs; c.settings["preserve"]=json.loads(preserve_json); c.save(output_path); return (str(Path(output_path).resolve()),)
 
 class GenjutsuPromptCompiler:
@@ -91,11 +93,12 @@ class GenjutsuWan22Generator:
     RETURN_TYPES=("STRING",); RETURN_NAMES=("video_path",); FUNCTION="generate"; CATEGORY="Genjutsu/Generation"
     def generate(self,source_video,reference_image,mode,prompt,negative_prompt,model_id,dtype,pose_video,face_video,mask_video,output_path,seed,steps):
         from genjutsu.backends.wan import Wan22Backend
-        frames,info=read_frames(source_video)
+        frames,info=read_frames(source_video,disk_backed=True)
         c=ControlPackage(source_video=info.path,fps=info.fps,width=info.width,height=info.height,frame_count=info.frame_count,operation=Operation.CHARACTER_SWAP,prompt=prompt,negative_prompt=negative_prompt)
+        c.fps_rational=info.fps_rational;c.time_base=info.time_base;c.frame_pts=info.frame_pts;c.frame_durations=info.frame_durations;c.timestamps=info.timestamps;c.source_start_time=info.start_time;c.is_vfr=info.is_vfr
         c.references.references=[Reference(str(Path(reference_image).resolve()),"CHARACTER",1.)]; c.settings.update({"pose_video":pose_video or None,"face_video":face_video or None,"mask_video":mask_video or None,"seed":seed})
         engine=Wan22Backend({"mode":mode,"model_id":model_id,"dtype":dtype,"steps":steps,"cpu_offload":True}); out_frames=engine.generate(c,frames,Path(output_path).parent)
-        write_video(out_frames,output_path,info.fps,audio_from=source_video)
+        write_video(out_frames,output_path,info.fps_rational,audio_from=source_video,**timing_kwargs(info))
         return (str(Path(output_path).resolve()),)
 
 class GenjutsuVideoOutput:
@@ -122,14 +125,15 @@ class GenjutsuWanVACEGenerator:
     RETURN_TYPES=("STRING",); RETURN_NAMES=("video_path",); FUNCTION="generate"; CATEGORY="Genjutsu/Generation"
     def generate(self,source_video,reference_image,additional_reference_images_json,edit_mask_directory,prompt,negative_prompt,model_id,dtype,output_path,seed,steps,chunk_frames,overlap_frames):
         from genjutsu.backends.vace import WanVACEBackend
-        frames,info=read_frames(source_video); masks=sorted(Path(edit_mask_directory).glob("*.png"))
+        frames,info=read_frames(source_video,disk_backed=True); masks=sorted(Path(edit_mask_directory).glob("*.png"))
         if len(masks)!=len(frames): raise ValueError(f"Expected {len(frames)} masks, got {len(masks)}")
         c=ControlPackage(source_video=info.path,fps=info.fps,width=info.width,height=info.height,frame_count=info.frame_count,operation=Operation.OBJECT_SWAP,prompt=prompt,negative_prompt=negative_prompt)
+        c.fps_rational=info.fps_rational;c.time_base=info.time_base;c.frame_pts=info.frame_pts;c.frame_durations=info.frame_durations;c.timestamps=info.timestamps;c.source_start_time=info.start_time;c.is_vfr=info.is_vfr
         from genjutsu.analysis import scene_cuts
         additional=json.loads(additional_reference_images_json or "[]")
         c.references.references=[Reference(str(Path(p).resolve()),"OBJECT",1.) for p in [reference_image,*additional]]; c.object_masks=[str(Path(edit_mask_directory).resolve())]; c.settings["seed"]=seed; c.scene_cuts=scene_cuts(frames)
         engine=WanVACEBackend({"model_id":model_id,"dtype":dtype,"steps":steps,"chunk_frames":chunk_frames,"overlap_frames":overlap_frames,"cpu_offload":True})
-        out_frames=engine.generate(c,frames,Path(output_path).parent); write_video(out_frames,output_path,info.fps,audio_from=source_video)
+        out_frames=engine.generate(c,frames,Path(output_path).parent); write_video(out_frames,output_path,info.fps_rational,audio_from=source_video,**timing_kwargs(info))
         return (str(Path(output_path).resolve()),)
 
 class GenjutsuPoseExtractor:
@@ -168,7 +172,7 @@ class GenjutsuTemporalRepair:
     RETURN_TYPES=("STRING",); RETURN_NAMES=("video_path",); FUNCTION="repair"; CATEGORY="Genjutsu/Post Processing"
     def repair(self,video_path,strength,output_path):
         from genjutsu.temporal import stabilize_generated
-        frames,info=read_frames(video_path); repaired=stabilize_generated(frames,strength); write_video(repaired,output_path,info.fps,audio_from=video_path); return (str(Path(output_path).resolve()),)
+        frames,info=read_frames(video_path,disk_backed=True); repaired=stabilize_generated(frames,strength); write_video(repaired,output_path,info.fps_rational,audio_from=video_path,**timing_kwargs(info)); return (str(Path(output_path).resolve()),)
 
 class GenjutsuCompositor:
     @classmethod
@@ -176,10 +180,10 @@ class GenjutsuCompositor:
     RETURN_TYPES=("STRING",); RETURN_NAMES=("video_path",); FUNCTION="composite_video"; CATEGORY="Genjutsu/Post Processing"
     def composite_video(self,source_video,generated_video,edit_mask_directory,output_path,feather_px):
         from genjutsu.compositing import composite
-        src,info=read_frames(source_video); gen,_=read_frames(generated_video); mask_files=sorted(Path(edit_mask_directory).glob("*.png"))
+        src,info=read_frames(source_video,disk_backed=True); gen,_=read_frames(generated_video,disk_backed=True); mask_files=sorted(Path(edit_mask_directory).glob("*.png"))
         if len(src)!=len(gen) or len(src)!=len(mask_files): raise ValueError("Source, generated video and mask sequences must have identical frame counts")
-        out=[composite(a,b,np.asarray(Image.open(m).convert("L")),feather_px=feather_px) for a,b,m in zip(src,gen,mask_files)]
-        write_video(out,output_path,info.fps,audio_from=source_video); return (str(Path(output_path).resolve()),)
+        out=FrameStore.from_frames(composite(a,b,np.asarray(Image.open(m).convert("L")),feather_px=feather_px) for a,b,m in zip(src,gen,mask_files))
+        write_video(out,output_path,info.fps_rational,audio_from=source_video,**timing_kwargs(info)); return (str(Path(output_path).resolve()),)
 
 class GenjutsuIdentityScore:
     @classmethod
@@ -200,7 +204,7 @@ class GenjutsuUpscaler:
     def upscale(self,video_path,method,scale,model_path,output_path):
         from genjutsu.restoration import resize_frames,realesrgan
         frames,info=read_frames(video_path); out=resize_frames(frames,scale) if method=="lanczos" else realesrgan(frames,model_path,scale)
-        write_video(out,output_path,info.fps,audio_from=video_path); return (str(Path(output_path).resolve()),)
+        write_video(out,output_path,info.fps_rational,audio_from=video_path,**timing_kwargs(info)); return (str(Path(output_path).resolve()),)
 
 NODE_CLASS_MAPPINGS={
     "GenjutsuVideoLoader":GenjutsuVideoLoader,"GenjutsuSceneAnalyzer":GenjutsuSceneAnalyzer,"GenjutsuGroundingDetector":GenjutsuGroundingDetector,

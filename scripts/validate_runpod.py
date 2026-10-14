@@ -31,7 +31,7 @@ def main():
     model_manifest_path=models/"manifest.json"
     model_manifest=json.loads(model_manifest_path.read_text(encoding="utf-8")) if model_manifest_path.is_file() else {}
     from genjutsu.video import read_frames,probe_video
-    frames,video_info=read_frames(source)
+    frames,video_info=read_frames(source,disk_backed=True)
     if not frames or video_info.fps<=0:raise RuntimeError("source.mp4 did not decode to a valid constant-rate video")
     if args.suite in ("wan-i2v","all"):
         from genjutsu.analysis import scene_cuts
@@ -47,12 +47,13 @@ def main():
             from genjutsu.analysis import scene_cuts
             from genjutsu.selection import select_and_track
             target=str(manifest.get("target_prompt","person"))
-            masks=[]; details=[]; boundaries=[0]+scene_cuts(frames)+[len(frames)]
+            from genjutsu.frame_store import FrameStore
+            masks=FrameStore(); details=[]; boundaries=[0]+scene_cuts(frames)+[len(frames)]
             for start,end in zip(boundaries,boundaries[1:]):
                 current,detail=select_and_track(frames[start:end],target,str(require(Path(model_manifest.get("grounding_dino",models/"grounding-dino")),"Grounding DINO files")),
                     str(require(Path(model_manifest.get("sam2_config",models/"sam2.yaml")),"SAM 2 config")),
                     str(require(Path(model_manifest.get("sam2_checkpoint",models/"sam2_hiera_large.pt")),"SAM 2 checkpoint")),
-                    int(manifest.get("selection_frame",0)),args.device,detection_index=int(manifest.get("detection_index",0)))
+                    int(manifest.get("selection_frame",0)),args.device,detection_index=int(manifest.get("detection_index",0)),chunk_frames=int(manifest.get("selection_chunk_frames",32)))
                 masks.extend(current);details.append(detail)
             if len(masks)!=len(frames) or not all(np.any(m) for m in masks):raise RuntimeError("SAM 2 result has empty or missing shot masks")
             results.append({"suite":suite,"shots":len(details),"tracked_masks":len(masks),"details":details})
@@ -95,6 +96,9 @@ def main():
                 str(manifest.get("prompt","A coherent high quality transformation following the supplied reference.")),[str(reference)],str(mask_dir) if mask_dir else None,
                 config_path=config_path,seed=int(manifest.get("seed",1234)),**transform_settings)
             output_info=probe_video(result)
+            from fractions import Fraction
+            tolerance=max(float(Fraction(job_info.time_base)),float(Fraction(output_info.time_base)))
+            if not np.allclose(output_info.timestamps,job_info.timestamps,atol=tolerance,rtol=0) or abs(output_info.duration-job_info.duration)>tolerance+.001:raise RuntimeError("Generated output presentation timestamps or endpoint differ from source")
             if output_info.frame_count!=job_info.frame_count or abs(output_info.fps-job_info.fps)>.05:raise RuntimeError(f"Generated output timing mismatch: source={job_info.frame_count}@{job_info.fps}, output={output_info.frame_count}@{output_info.fps}")
             if job_info.has_audio and not output_info.has_audio:raise RuntimeError("Generated output lost the source audio stream")
             results.append({"suite":suite,"output":str(result),"frames":output_info.frame_count,"fps":output_info.fps,"audio_preserved":output_info.has_audio})

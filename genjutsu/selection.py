@@ -6,7 +6,7 @@ import numpy as np
 def select_and_track(frames: list[np.ndarray], text_prompt: str, detector_dir: str,
                      sam2_config: str, sam2_checkpoint: str, frame_index: int = 0,
                      device: str = "cuda", box_threshold: float = .30,
-                     text_threshold: float = .25, detection_index: int = 0):
+                     text_threshold: float = .25, detection_index: int = 0, chunk_frames: int = 32):
     """Detect a prompted object at a selected frame, initialize SAM 2 with its box,
     and propagate the resulting object mask through that shot.
 
@@ -31,8 +31,8 @@ def select_and_track(frames: list[np.ndarray], text_prompt: str, detector_dir: s
     selected = detections[detection_index]
     box = tuple(int(round(v)) for v in selected["box"])
     from .segmentation import SAM2Segmenter
-    masks = SAM2Segmenter(sam2_config, sam2_checkpoint, device).segment_video(frames, frame_index, box)
+    masks = SAM2Segmenter(sam2_config, sam2_checkpoint, device).segment_video(frames, frame_index, box,chunk_frames=chunk_frames)
     if len(masks) != len(frames) or not any(np.any(mask) for mask in masks):
         raise RuntimeError("SAM 2 did not return a non-empty propagated mask sequence")
     return masks, {"prompt": text_prompt, "frame_index": frame_index, "detection": selected,
-                   "tracker": "facebookresearch/sam2 video predictor", "mask_frames": len(masks)}
+                   "tracker": "facebookresearch/sam2 video predictor", "mask_frames": len(masks),"chunk_frames":chunk_frames}

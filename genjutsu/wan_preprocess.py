@@ -35,11 +35,12 @@ def validate_wan_conditioning(artifacts: dict[str, str | Path], expected_fps: fl
     """Validate Wan's actual four-video replacement inputs before model invocation."""
     missing=[name for name in OUTPUTS if name not in artifacts]
     if missing:raise ValueError(f"Wan Animate replacement artifacts missing: {missing}")
-    from .video import read_frames
+    from .video import iter_frames
     import numpy as np
     report={}
     for key in OUTPUTS:
         path=Path(artifacts[key]); info=probe_video(path)
+        if info.is_vfr:raise ValueError(f"{key} must be constant-rate Wan conditioning; received VFR video")
         if expected_fps is not None and abs(info.fps-expected_fps)>.05:
             raise ValueError(f"{key} is {info.fps} FPS; expected source FPS {expected_fps}")
         if expected_frames is not None and info.frame_count!=expected_frames:
@@ -49,12 +50,14 @@ def validate_wan_conditioning(artifacts: dict[str, str | Path], expected_fps: fl
     primary_sizes={tuple(report[key]["size"]) for key in ("pose_video","background_video","mask_video")}
     if len(counts)!=1 or len(fps)!=1 or len(primary_sizes)!=1:raise ValueError(f"Wan condition videos must have aligned frame count/FPS and pose/background/mask geometry: {report}")
     if tuple(report["face_video"]["size"])!=(512,512):raise ValueError(f"Wan Animate face conditioning must be cropped to 512x512, got {report['face_video']['size']}")
-    masks,_=read_frames(artifacts["mask_video"])
-    sample=np.stack(masks[::max(1,len(masks)//24)])
-    if np.max(np.abs(sample[:,:,:,0].astype(np.int16)-sample[:,:,:,1].astype(np.int16)))>2 or np.max(np.abs(sample[:,:,:,1].astype(np.int16)-sample[:,:,:,2].astype(np.int16)))>2:
-        raise ValueError("Wan replacement mask video must be a grayscale RGB mask (same value in each channel)")
-    values=sample[:,:,:,0]
-    if not np.any(values>=240) or not np.any(values<=15):
+    white=black=False
+    for sample in iter_frames(artifacts["mask_video"]):
+        sample=sample.astype(np.int16)
+        if np.max(np.abs(sample[:,:,0]-sample[:,:,1]))>2 or np.max(np.abs(sample[:,:,1]-sample[:,:,2]))>2:
+            raise ValueError("Wan replacement mask video must be a grayscale RGB mask (same value in each channel)")
+        white=white or bool(np.any(sample[:,:,0]>=240))
+        black=black or bool(np.any(sample[:,:,0]<=15))
+    if not white or not black:
         raise ValueError("Wan replacement mask must contain both white generation pixels and black preserved pixels")
     report["mask_convention"]={"white":"generate/replace","black":"preserve/condition","channels":"grayscale RGB"}
     return report
@@ -75,8 +78,9 @@ def preprocess_wan_animate(source: str | Path, reference: str | Path, output_dir
             raise FileNotFoundError(f"Wan Animate preprocessing dependency is missing: {path}")
     output = Path(output_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
+    from .cache import content_identity,software_signature
     fingerprint={"source":_sha256_file(source),"reference":_sha256_file(reference),
-        "preprocessor_script_mtime":script.stat().st_mtime_ns,"checkpoint_files":[(str(p.relative_to(ckpt)),p.stat().st_size,p.stat().st_mtime_ns) for p in required[1:]],
+        "preprocessor_source":content_identity(script.parent),"checkpoint_files":[(str(p.relative_to(ckpt)),_sha256_file(p)) for p in required[1:]],"software":software_signature(),
         "fps":fps,"resolution_area":list(resolution_area)}
     fingerprint["key"]=hashlib.sha256(json.dumps(fingerprint,sort_keys=True).encode()).hexdigest()
     existing={name:str(output/filename) for name,filename in OUTPUTS.items()}

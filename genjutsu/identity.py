@@ -23,7 +23,8 @@ class LocalInsightFace:
         return [self.app.get(cv2.cvtColor(frame,cv2.COLOR_RGB2BGR)) for frame in frames]
     def score(self,reference_embedding,frames):
         result=[]
-        for faces in self.embeddings(frames):
+        for frame in frames:
+            faces=self.embeddings([frame])[0]
             result.append(max((cosine_similarity(reference_embedding,f.normed_embedding) for f in faces),default=0.0))
         return result
 

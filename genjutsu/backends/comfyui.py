@@ -8,10 +8,12 @@ from ..controls import ControlPackage
 class ComfyUIBackend(VideoBackend):
     name="comfyui-http"
     def __init__(self,settings: dict):
+        self.settings=dict(settings)
         self.url=settings.get("url","http://127.0.0.1:8188").rstrip("/")
         self.workflow=settings.get("workflow"); self.timeout=int(settings.get("timeout",3600))
         self.node_map=settings.get("node_map",{})
     def generate(self,controls: ControlPackage,source_frames: list,output_dir: str|Path)->list:
+        Path(output_dir).mkdir(parents=True,exist_ok=True)
         if not self.workflow: raise BackendUnavailable("ComfyUI backend is selected but backend.workflow is unset. Configure an API-format workflow that runs a real video generation model and produces a video output.")
         path=Path(self.workflow)
         if not path.is_file(): raise FileNotFoundError(f"ComfyUI API workflow not found: {path}")
@@ -54,7 +56,7 @@ class ComfyUIBackend(VideoBackend):
                 except requests.RequestException as e: raise BackendUnavailable(f"Could not download ComfyUI output video: {e}") from e
                 target=Path(output_dir)/entry.get("subfolder","")/entry["filename"]; target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(res.content)
                 from ..video import read_frames
-                result,_=read_frames(target)
+                result,_=read_frames(target,disk_backed=True)
                 return result
             time.sleep(2)
         raise TimeoutError(f"ComfyUI workflow {prompt_id} did not finish within {self.timeout} seconds")

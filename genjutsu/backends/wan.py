@@ -12,6 +12,8 @@ class Wan22Backend(VideoBackend):
     name="wan22-diffusers"
     _PIPELINES={}; _LOCK=threading.Lock()
     def __init__(self, settings: dict):
+        self.settings=dict(settings)
+        self.revision=settings.get("revision")
         self.model_id=settings.get("model_id","Wan-AI/Wan2.2-Animate-14B-Diffusers")
         self.mode=settings.get("mode","animate")
         self.dtype=settings.get("dtype","float16")
@@ -22,6 +24,9 @@ class Wan22Backend(VideoBackend):
         self.use_source_first_frame=bool(settings.get("use_source_first_frame",False))
         self.pose_video=settings.get("pose_video"); self.face_video=settings.get("face_video"); self.mask_video=settings.get("mask_video"); self.background_video=settings.get("background_video")
     def _load(self):
+        if not hasattr(self,"_cache_model_identity"):
+            from ..cache import backend_signature
+            backend_signature(self)
         if self._pipe is not None:return self._pipe
         try:
             import torch
@@ -30,12 +35,13 @@ class Wan22Backend(VideoBackend):
         if self.device.startswith("cuda") and not torch.cuda.is_available(): raise BackendUnavailable("Configured Wan backend requests CUDA, but torch.cuda.is_available() is false.")
         dtype=getattr(torch,self.dtype,None)
         if dtype is None: raise ValueError(f"Unsupported torch dtype: {self.dtype}")
-        key=(self.model_id,self.mode,self.dtype,self.device,self.offload,self.allow_download)
+        key=(self.model_id,self.revision,getattr(self,"_cache_model_identity",None),self.mode,self.dtype,self.device,self.offload,self.allow_download)
         with self._LOCK:
             if key in self._PIPELINES:self._pipe=self._PIPELINES[key]; return self._pipe
         try:
-            if self.mode=="animate": self._pipe=WanAnimatePipeline.from_pretrained(self.model_id,torch_dtype=dtype,local_files_only=not self.allow_download)
-            elif self.mode=="i2v": self._pipe=WanImageToVideoPipeline.from_pretrained(self.model_id,torch_dtype=dtype,local_files_only=not self.allow_download)
+            model=getattr(self,"_resolved_model_path",None) or self.model_id
+            if self.mode=="animate": self._pipe=WanAnimatePipeline.from_pretrained(model,revision=self.revision,torch_dtype=dtype,local_files_only=not self.allow_download)
+            elif self.mode=="i2v": self._pipe=WanImageToVideoPipeline.from_pretrained(model,revision=self.revision,torch_dtype=dtype,local_files_only=not self.allow_download)
             else: raise ValueError("mode must be animate or i2v")
             if self.offload: self._pipe.enable_model_cpu_offload()
             else: self._pipe.to(self.device)
@@ -45,6 +51,10 @@ class Wan22Backend(VideoBackend):
         return self._pipe
     def generate(self, controls: ControlPackage, source_frames: list, output_dir: str|Path) -> list:
         if not source_frames: raise ValueError("Source video has no frames")
+        if self.mode=="animate" and controls.is_vfr:
+            raise ValueError("Wan Animate requires explicitly prepared CFR footage; VFR timing is supported by Wan VACE")
+        if len(source_frames)>int(self.settings.get("max_shot_frames",256)):
+            raise ValueError("Wan Animate/I2V shot exceeds backend.max_shot_frames (default 256). Split the source into shorter shots or use chunked Wan VACE; increasing this limit requires GPU/host memory validation.")
         try:
             import torch
             from PIL import Image

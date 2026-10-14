@@ -8,7 +8,7 @@ def main():
     p=argparse.ArgumentParser(); p.add_argument("--comfyui-path"); p.add_argument("--check",action="store_true"); p.add_argument("--install-deps",action="store_true"); args=p.parse_args()
     if args.install_deps: subprocess.run([sys.executable,"-m","pip","install","-e",str(ROOT)+"[video,ui,api]"],check=True)
     missing=[x for x in ("ffmpeg","ffprobe") if shutil.which(x) is None]
-    modules={m:importlib.util.find_spec(m) is not None for m in ("numpy","PIL","yaml","requests","cv2","torch","diffusers","transformers","sam2","mediapipe")}
+    modules={m:importlib.util.find_spec(m) is not None for m in ("numpy","PIL","yaml","requests","cv2","av","torch","diffusers","transformers","sam2","mediapipe")}
     print("Python:",sys.version.split()[0]); print("FFmpeg:","available" if not missing else "missing: "+", ".join(missing)); print("Modules:",modules)
     if args.comfyui_path:
         comfy=Path(args.comfyui_path).expanduser().resolve()

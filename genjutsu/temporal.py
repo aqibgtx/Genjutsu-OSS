@@ -19,7 +19,9 @@ def flow_consistency(frames: list[np.ndarray]) -> float:
 def stabilize_generated(frames: list[np.ndarray], strength: float=.2, scene_cuts: list[int]|None=None) -> list[np.ndarray]:
     """Flow-warp temporally stable pixels, rejecting occlusions and resetting at cuts."""
     if not frames or strength<=0:return frames
-    cv2=_cv2(); out=[frames[0]]; cuts=set(scene_cuts or [])
+    from .frame_store import FrameStore, FrameView
+    cv2=_cv2(); out=FrameStore() if isinstance(frames,(FrameStore,FrameView)) else []
+    out.append(frames[0]); cuts=set(scene_cuts or [])
     for i in range(1,len(frames)):
         if i in cuts:
             out.append(frames[i]);continue
@@ -33,7 +35,7 @@ def stabilize_generated(frames: list[np.ndarray], strength: float=.2, scene_cuts
         reliable=error < (1.0+0.05*magnitude)
         alpha=(reliable.astype(np.float32)*float(np.clip(strength,0,1)))[...,None]
         out.append(np.clip(frames[i].astype(np.float32)*(1-alpha)+warped.astype(np.float32)*alpha,0,255).astype(np.uint8))
-    return out
+    return out.finish() if isinstance(out,FrameStore) else out
 
 def _cv2():
     try: import cv2; return cv2
