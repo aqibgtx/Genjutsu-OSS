@@ -6,14 +6,62 @@ def _cv2():
     try: import cv2; return cv2
     except ImportError as e: raise RuntimeError("OpenCV is required for video analysis. Install genjutsu-oss[video].") from e
 
-def scene_cuts(frames: list[np.ndarray], threshold: float = .42) -> list[int]:
-    cv2 = _cv2(); cuts = []
-    for i in range(1, len(frames)):
-        a = cv2.cvtColor(cv2.resize(frames[i-1], (64, 64)), cv2.COLOR_RGB2HSV)
-        b = cv2.cvtColor(cv2.resize(frames[i], (64, 64)), cv2.COLOR_RGB2HSV)
-        ha = cv2.calcHist([a], [0, 1], None, [32, 32], [0, 180, 0, 256]); hb = cv2.calcHist([b], [0, 1], None, [32, 32], [0, 180, 0, 256])
-        if cv2.compareHist(ha, hb, cv2.HISTCMP_BHATTACHARYYA) >= threshold: cuts.append(i)
-    return cuts
+def scene_cuts(
+    frames: list[np.ndarray],
+    threshold: float = .60,
+    *,
+    fps: float = 30.0,
+    min_shot_duration: float = .25,
+    persistence_ratio: float = .60,
+) -> list[int]:
+    """Detect persistent hard cuts and suppress motion flashes/tiny segments.
+
+    A cut must cause a large histogram change that remains in the following
+    frame. This rejects one-frame flashes and most large-motion false positives.
+    Nearby candidates are consolidated, and boundaries that would create a
+    shot shorter than ``min_shot_duration`` are merged into their neighbors.
+    """
+    if threshold <= 0 or threshold > 1:
+        raise ValueError("threshold must be in (0, 1]")
+    if fps <= 0 or min_shot_duration < 0:
+        raise ValueError("fps must be positive and min_shot_duration non-negative")
+    if not 0 <= persistence_ratio < 1:
+        raise ValueError("persistence_ratio must be in [0, 1)")
+    if len(frames) < 3:
+        return []
+
+    cv2 = _cv2()
+    histograms = []
+    for frame in frames:
+        small = cv2.resize(frame, (64, 64), interpolation=cv2.INTER_AREA)
+        hsv = cv2.cvtColor(small, cv2.COLOR_RGB2HSV)
+        hist = cv2.calcHist([hsv], [0, 1], None, [32, 32], [0, 180, 0, 256])
+        cv2.normalize(hist, hist)
+        histograms.append(hist)
+
+    distances = [0.0] + [
+        float(cv2.compareHist(histograms[i - 1], histograms[i], cv2.HISTCMP_BHATTACHARYYA))
+        for i in range(1, len(histograms))
+    ]
+    candidates = []
+    for i in range(2, len(frames) - 2):
+        before, after = distances[i], distances[i + 1]
+        stable_before = distances[i - 1] <= threshold * .75
+        stable_after = distances[i + 2] <= threshold * .75
+        if stable_before and stable_after and before >= threshold and after <= min(threshold * .75, before * persistence_ratio):
+            candidates.append((i, before))
+
+    min_frames = max(2, int(np.ceil(fps * min_shot_duration)))
+    cuts = []
+    for index, score in candidates:
+        if index < min_frames or len(frames) - index < min_frames:
+            continue
+        if cuts and index - cuts[-1][0] < min_frames:
+            if score > cuts[-1][1]:
+                cuts[-1] = (index, score)
+        else:
+            cuts.append((index, score))
+    return [index for index, _ in cuts]
 
 def optical_flow(frames: list[np.ndarray]) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """Farneback CPU flow in pixels/frame; this is a real classical baseline, not RAFT."""

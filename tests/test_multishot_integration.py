@@ -28,7 +28,7 @@ def test_synthetic_multishot_video_audio_motion_masks_and_occlusion(tmp_path,fps
     source=tmp_path/f"source_{fps}.mp4"
     subprocess.run(["ffmpeg","-y","-v","error","-i",str(silent),"-i",str(tone),"-map","0:v:0","-map","1:a:0","-c:v","copy","-c:a","aac","-shortest",str(source)],check=True,capture_output=True)
     decoded,info=read_frames(source)
-    cuts=scene_cuts(decoded)
+    cuts=scene_cuts(decoded,fps=fps,min_shot_duration=.10)
     assert info.has_audio and info.audio_metadata["codec_name"]=="aac"
     assert len(decoded)==12 and abs(info.fps-fps)<.01
     assert len(cuts)==2 and shot_ranges(len(decoded),cuts)==[(0,4),(4,8),(8,12)]

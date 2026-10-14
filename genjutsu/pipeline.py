@@ -17,7 +17,7 @@ from .routing import route_config
 
 def analyze_video(path: str|Path, *, frame_directory=None):
     frames,info=read_frames(path,disk_backed=True,directory=frame_directory)
-    cuts=scene_cuts(frames)
+    cuts=scene_cuts(frames, fps=info.fps)
     camera=estimate_camera(frames)
     # A cross-cut affine estimate is meaningless; retain its position for
     # indexing but explicitly mark it invalid in the whole-clip package.

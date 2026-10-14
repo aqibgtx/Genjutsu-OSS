@@ -19,6 +19,24 @@ def test_video_understanding_returns_measured_outputs(tmp_path):
     assert len(forward)==len(backward)==2 and np.isfinite(forward[0]).all()
     assert len(estimate_camera(frames)["trajectory"])==2
 
+def test_scene_cuts_ignore_transient_flash_and_merge_tiny_segments():
+    frames=[]
+    colors=((20,30,190),(30,180,35),(190,35,20))
+    for i in range(120):
+        frame=np.empty((48,64,3),np.uint8)
+        frame[:]=colors[i//40]
+        x=(i%20)*2
+        frame[12:36,x:x+12]=(245,245,245)
+        frames.append(frame)
+    frames[15][:]=(255,0,255)  # a one-frame full-screen flash is not a shot
+    frames[65][:]=(0,255,255)
+    assert scene_cuts(frames,fps=30)==[40,80]
+
+    rapid=[]
+    for color in ((20,30,190),(30,180,35),(190,35,20)):
+        rapid.extend([np.full((32,32,3),color,np.uint8) for _ in range(6)])
+    assert scene_cuts(rapid,fps=30)==[]
+
 def test_supported_output_codecs(tmp_path):
     frames=[np.full((32,48,3),value,np.uint8) for value in (20,80,160,220,120)]
     for codec,extension in (("h265","mp4"),("prores","mov"),("vp9","webm")):
