@@ -89,23 +89,25 @@ class GenjutsuPromptCompiler:
 class GenjutsuWan22Generator:
     """Run actual Hugging Face Diffusers Wan 2.2 inference; requires local/downloadable model weights."""
     @classmethod
-    def INPUT_TYPES(cls): return {"required":{"source_video":("STRING",{"default":""}),"reference_image":("STRING",{"default":""}),"mode":(["animate","i2v"],),"prompt":("STRING",{"multiline":True}),"negative_prompt":("STRING",{"multiline":True}),"model_id":("STRING",{"default":"Wan-AI/Wan2.2-Animate-14B-Diffusers"}),"dtype":(["float16","bfloat16","float32"],),"pose_video":("STRING",{"default":""}),"face_video":("STRING",{"default":""}),"mask_video":("STRING",{"default":""}),"output_path":("STRING",{"default":"output/wan_generated.mp4"}),"seed":("INT",{"default":0,"min":0}),"steps":("INT",{"default":30,"min":1,"max":100})}}
+    def INPUT_TYPES(cls): return {"required":{"source_video":("STRING",{"default":""}),"reference_image":("STRING",{"default":""}),"mode":(["animate","i2v"],),"prompt":("STRING",{"multiline":True}),"negative_prompt":("STRING",{"multiline":True}),"model_id":("STRING",{"default":"Wan-AI/Wan2.2-Animate-14B-Diffusers"}),"dtype":(["float16","bfloat16","float32"],),"pose_video":("STRING",{"default":""}),"face_video":("STRING",{"default":""}),"mask_video":("STRING",{"default":""}),"output_path":("STRING",{"default":"output/wan_generated.mp4"}),"seed":("INT",{"default":0,"min":0}),"steps":("INT",{"default":30,"min":1,"max":100})},"optional":{"background_video":("STRING",{"default":""}),"wan_repo":("STRING",{"default":""}),"preprocess_checkpoint_dir":("STRING",{"default":""})}}
     RETURN_TYPES=("STRING",); RETURN_NAMES=("video_path",); FUNCTION="generate"; CATEGORY="Genjutsu/Generation"
-    def generate(self,source_video,reference_image,mode,prompt,negative_prompt,model_id,dtype,pose_video,face_video,mask_video,output_path,seed,steps):
+    def generate(self,source_video,reference_image,mode,prompt,negative_prompt,model_id,dtype,pose_video,face_video,mask_video,output_path,seed,steps,background_video="",wan_repo="",preprocess_checkpoint_dir=""):
         from genjutsu.backends.wan import Wan22Backend
         frames,info=read_frames(source_video,disk_backed=True)
         c=ControlPackage(source_video=info.path,fps=info.fps,width=info.width,height=info.height,frame_count=info.frame_count,operation=Operation.CHARACTER_SWAP,prompt=prompt,negative_prompt=negative_prompt)
         c.fps_rational=info.fps_rational;c.time_base=info.time_base;c.frame_pts=info.frame_pts;c.frame_durations=info.frame_durations;c.timestamps=info.timestamps;c.source_start_time=info.start_time;c.is_vfr=info.is_vfr
-        c.references.references=[Reference(str(Path(reference_image).resolve()),"CHARACTER",1.)]; c.settings.update({"pose_video":pose_video or None,"face_video":face_video or None,"mask_video":mask_video or None,"seed":seed})
+        c.references.references=[Reference(str(Path(reference_image).resolve()),"CHARACTER",1.)]; c.settings.update({"pose_video":pose_video or None,"face_video":face_video or None,"mask_video":mask_video or None,"background_video":background_video or None,"seed":seed})
+        if wan_repo and preprocess_checkpoint_dir:
+            c.settings["wan_animate_preprocess"]={"wan_repo":wan_repo,"checkpoint_dir":preprocess_checkpoint_dir,"resolution_area":[info.width,info.height]}
         engine=Wan22Backend({"mode":mode,"model_id":model_id,"dtype":dtype,"steps":steps,"cpu_offload":True}); out_frames=engine.generate(c,frames,Path(output_path).parent)
         write_video(out_frames,output_path,info.fps_rational,audio_from=source_video,**timing_kwargs(info))
         return (str(Path(output_path).resolve()),)
 
 class GenjutsuVideoOutput:
     @classmethod
-    def INPUT_TYPES(cls): return {"required":{"video_path":("STRING",{"default":""})}}
+    def INPUT_TYPES(cls): return {"required":{"video_path":("STRING",{"default":""})},"optional":{"validation_report":("STRING",{"default":""})}}
     RETURN_TYPES=(); FUNCTION="output"; OUTPUT_NODE=True; CATEGORY="Genjutsu/Video"
-    def output(self,video_path):
+    def output(self,video_path,validation_report=""):
         if not Path(video_path).is_file(): raise FileNotFoundError(video_path)
         try:
             import folder_paths
@@ -114,7 +116,13 @@ class GenjutsuVideoOutput:
             if src!=dest.resolve():
                 import shutil
                 shutil.copy2(src,dest)
-            return {"ui":{"text":[str(dest)],"gifs":[{"filename":dest.name,"subfolder":"","type":"output"}]}}
+            text=[str(dest)]
+            if validation_report:
+                report=json.loads(Path(validation_report).read_text())
+                identity=report.get('identity_evaluation')
+                if report.get('quality')=='draft':text.append('DRAFT preview: production quality is not accepted.')
+                if identity:text.append(f"Identity gate: {'PASSED' if identity['passes_threshold'] else 'FAILED'}; mean similarity {identity['mean']:.3f}")
+            return {"ui":{"text":text,"gifs":[{"filename":dest.name,"subfolder":"","type":"output"}]}}
         except ImportError:
             return {"ui":{"text":[str(Path(video_path).resolve())]}}
 
@@ -206,7 +214,58 @@ class GenjutsuUpscaler:
         frames,info=read_frames(video_path); out=resize_frames(frames,scale) if method=="lanczos" else realesrgan(frames,model_path,scale)
         write_video(out,output_path,info.fps_rational,audio_from=video_path,**timing_kwargs(info)); return (str(Path(output_path).resolve()),)
 
+class GenjutsuTransform:
+    """Source + operation + references -> real automatic transformation pipeline."""
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required":{"source_video":("STRING",{"default":""}),
+            "operation":([o.value for o in Operation],),"target":("STRING",{"default":"person"}),
+            "reference_images_json":("STRING",{"default":"[]","multiline":True}),
+            "reference_layout":(["images","face_sheet_2x3"],),"prompt":("STRING",{"default":"","multiline":True}),
+            "quality":(["draft","source"],),"seed":("INT",{"default":1234,"min":0}),
+            "config_path":("STRING",{"default":"genjutsu-runtime.yaml"}),
+            "output_path":("STRING",{"default":"output/genjutsu_preview.mp4"})},"optional":{"identity_lock":("BOOLEAN",{"default":True})}}
+    RETURN_TYPES=("STRING","STRING");RETURN_NAMES=("video_path","validation_report")
+    FUNCTION="transform";CATEGORY="Genjutsu"
+    def transform(self,source_video,operation,target,reference_images_json,reference_layout,prompt,quality,seed,config_path,output_path,identity_lock=True):
+        from genjutsu.workflow import run_transform
+        return run_transform(source_video,reference_images_json,operation,target,prompt,output_path,config_path,quality,seed,reference_layout,identity_lock)
+
+class GenjutsuWanAnimatePreprocess:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required":{"source_video":("STRING",{"default":""}),"reference_image":("STRING",{"default":""}),
+            "wan_repo":("STRING",{"default":""}),"checkpoint_directory":("STRING",{"default":""}),
+            "output_directory":("STRING",{"default":"output/wan_controls"})}}
+    RETURN_TYPES=("STRING","STRING","STRING","STRING")
+    RETURN_NAMES=("pose_video","face_video","background_video","mask_video")
+    FUNCTION="preprocess";CATEGORY="Genjutsu/Video Understanding"
+    def preprocess(self,source_video,reference_image,wan_repo,checkpoint_directory,output_directory):
+        from genjutsu.wan_preprocess import preprocess_wan_animate
+        info=probe_video(source_video)
+        if info.is_vfr:raise ValueError("Wan Animate needs explicitly retimed CFR footage")
+        result=preprocess_wan_animate(source_video,reference_image,output_directory,wan_repo,checkpoint_directory,
+            resolution_area=(info.width,info.height))
+        return tuple(result[key] for key in ("pose_video","face_video","background_video","mask_video"))
+
+class GenjutsuAutomaticSegmenter:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required":{"video_path":("STRING",{"default":""}),"target":("STRING",{"default":"person"}),
+            "detector_directory":("STRING",{"default":""}),"sam2_config":("STRING",{"default":""}),
+            "sam2_checkpoint":("STRING",{"default":""}),"output_directory":("STRING",{"default":"output/automatic_masks"})}}
+    RETURN_TYPES=("STRING",);RETURN_NAMES=("mask_directory",)
+    FUNCTION="segment";CATEGORY="Genjutsu/Video Understanding"
+    def segment(self,video_path,target,detector_directory,sam2_config,sam2_checkpoint,output_directory):
+        from genjutsu.selection import select_and_track
+        frames,_=read_frames(video_path,disk_backed=True)
+        masks,metadata=select_and_track(frames,target,detector_directory,sam2_config,sam2_checkpoint)
+        paths=save_masks(masks,output_directory)
+        (Path(output_directory)/"selection.json").write_text(json.dumps(metadata,indent=2))
+        return (str(Path(paths[0]).parent),)
+
 NODE_CLASS_MAPPINGS={
+    "GenjutsuTransform":GenjutsuTransform,"GenjutsuWanAnimatePreprocess":GenjutsuWanAnimatePreprocess,"GenjutsuAutomaticSegmenter":GenjutsuAutomaticSegmenter,
     "GenjutsuVideoLoader":GenjutsuVideoLoader,"GenjutsuSceneAnalyzer":GenjutsuSceneAnalyzer,"GenjutsuGroundingDetector":GenjutsuGroundingDetector,
     "GenjutsuSAM2Segmenter":GenjutsuSAM2Segmenter,"GenjutsuFlowTracker":GenjutsuFlowTracker,
     "GenjutsuOpticalFlow":GenjutsuOpticalFlow,"GenjutsuCameraAnalyzer":GenjutsuCameraAnalyzer,

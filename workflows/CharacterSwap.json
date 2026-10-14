@@ -1,4 +1,30 @@
 {
-  "1": {"class_type": "GenjutsuWan22Generator", "inputs": {"source_video": "input/source.mp4", "reference_image": "input/character.jpg", "mode": "animate", "prompt": "Replace the source character using the supplied preprocessed pose, face and mask controls. Preserve timing and camera.", "negative_prompt": "", "model_id": "Wan-AI/Wan2.2-Animate-14B-Diffusers", "dtype": "float16", "pose_video": "input/pose_preprocessed.mp4", "face_video": "input/face_preprocessed.mp4", "mask_video": "input/mask_preprocessed.mp4", "output_path": "output/character_swap.mp4", "seed": 0, "steps": 30}},
-  "2": {"class_type": "GenjutsuVideoOutput", "inputs": {"video_path": ["1", 0]}}
+  "1": {
+    "class_type": "GenjutsuTransform",
+    "inputs": {
+      "source_video": "genjutsu/source.mp4",
+      "operation": "character_swap",
+      "target": "person",
+      "reference_images_json": "[\"genjutsu/reference.png\"]",
+      "reference_layout": "images",
+      "prompt": "",
+      "quality": "draft",
+      "seed": 1234,
+      "config_path": "genjutsu-runtime.yaml",
+      "output_path": "output/CharacterSwap_draft.mp4"
+    }
+  },
+  "2": {
+    "class_type": "GenjutsuVideoOutput",
+    "inputs": {
+      "video_path": [
+        "1",
+        0
+      ],
+      "validation_report": [
+        "1",
+        1
+      ]
+    }
+  }
 }

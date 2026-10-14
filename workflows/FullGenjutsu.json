@@ -1,4 +1,30 @@
 {
-  "1": {"class_type": "GenjutsuWanVACEGenerator", "inputs": {"source_video": "input/source.mp4", "reference_image": "input/scene_reference.jpg", "additional_reference_images_json": "[\"input/style_reference.jpg\",\"input/character_reference.jpg\"]", "edit_mask_directory": "input/full_frame_masks", "prompt": "Reinterpret the complete scene using the supplied references while retaining source motion and timing.", "negative_prompt": "", "model_id": "Wan-AI/Wan2.1-VACE-1.3B-diffusers", "dtype": "float16", "output_path": "output/full_recast.mp4", "seed": 0, "steps": 30, "chunk_frames": 81, "overlap_frames": 9}},
-  "2": {"class_type": "GenjutsuVideoOutput", "inputs": {"video_path": ["1", 0]}}
+  "1": {
+    "class_type": "GenjutsuTransform",
+    "inputs": {
+      "source_video": "genjutsu/source.mp4",
+      "operation": "full_recast",
+      "target": "object",
+      "reference_images_json": "[\"genjutsu/reference.png\"]",
+      "reference_layout": "images",
+      "prompt": "",
+      "quality": "draft",
+      "seed": 1234,
+      "config_path": "genjutsu-runtime.yaml",
+      "output_path": "output/FullGenjutsu_draft.mp4"
+    }
+  },
+  "2": {
+    "class_type": "GenjutsuVideoOutput",
+    "inputs": {
+      "video_path": [
+        "1",
+        0
+      ],
+      "validation_report": [
+        "1",
+        1
+      ]
+    }
+  }
 }

@@ -18,6 +18,22 @@ def main():
         shutil.copytree(ROOT/"ComfyUI-Genjutsu",target,dirs_exist_ok=True,ignore=shutil.ignore_patterns("__pycache__","*.pyc"))
         shutil.copytree(ROOT/"genjutsu",target/"genjutsu",dirs_exist_ok=True,ignore=shutil.ignore_patterns("__pycache__","*.pyc"))
         shutil.copytree(ROOT/"workflows",target/"workflows",dirs_exist_ok=True)
+        # Graphical documents belong in ComfyUI user storage, not just inside
+        # custom_nodes. Never replace an existing user's edited workflow.
+        sidebar=comfy/"user"/"default"/"workflows"/"Genjutsu"
+        sidebar.mkdir(parents=True,exist_ok=True)
+        for workflow in (ROOT/"workflows"/"gui").glob("*.json"):
+            destination=sidebar/workflow.name
+            if not destination.exists():shutil.copy2(workflow,destination)
+        runtime=comfy/"genjutsu-runtime.yaml"
+        if not runtime.exists():
+            import yaml
+            config=yaml.safe_load((ROOT/"config.genjutsu.yaml").read_text(encoding="utf-8"))
+            config['backend']['animate_model_id']=str(comfy/'models/diffusers/Wan2.2-Animate-14B-Diffusers')
+            config['backend']['vace_model_id']=str(comfy/'models/diffusers/Wan2.1-VACE-1.3B-diffusers')
+            config['backend']['wan_animate_preprocess']['wan_repo']=str(ROOT.parent/'Wan2.2')
+            config['backend']['wan_animate_preprocess']['checkpoint_dir']=str(ROOT.parent/'genjutsu-models/Wan2.2-Animate/process_checkpoint')
+            runtime.write_text(yaml.safe_dump(config,sort_keys=False),encoding="utf-8")
         print("Installed:",target)
     return 2 if missing else 0
 if __name__=="__main__": raise SystemExit(main())

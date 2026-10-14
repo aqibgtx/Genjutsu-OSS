@@ -24,3 +24,35 @@ class ReferenceManager:
         hist=cv2.calcHist([hsv],[0,1,2],None,[16,8,8],[0,180,0,256,0,256]); cv2.normalize(hist,hist)
         orb=cv2.ORB_create(nfeatures=500); _,desc=orb.detectAndCompute(image,None)
         return {"color_histogram":hist.flatten().tolist(),"orb_descriptor_count":0 if desc is None else int(len(desc)),"feature_kind":"classical_appearance_not_identity","width":int(image.shape[1]),"height":int(image.shape[0])}
+
+def split_face_sheet(path, directory, rows=2, columns=3):
+    """Split an explicitly selected tiled sheet; trim its white label bands.
+
+    This is image preparation, not face detection or an identity embedding.
+    Arbitrary images are never silently treated as a sheet.
+    """
+    from PIL import Image
+    import numpy as np
+    if rows<1 or columns<1:raise ValueError("Reference grid dimensions must be positive")
+    directory=Path(directory);directory.mkdir(parents=True,exist_ok=True)
+    outputs=[]
+    with Image.open(path) as source:
+        source=source.convert("RGB")
+        for row in range(rows):
+            for column in range(columns):
+                tile=source.crop((round(column*source.width/columns),round(row*source.height/rows),
+                                  round((column+1)*source.width/columns),round((row+1)*source.height/rows)))
+                array=np.asarray(tile)
+                white=np.all(array>=245,axis=2)
+                separators=np.flatnonzero(white.mean(axis=1)>.97)
+                # A label strip begins with a near-white horizontal separator
+                # close to the bottom of each tile. Keep the photo above it.
+                bottom=[int(y) for y in separators if y>tile.height*.75]
+                if bottom:tile=tile.crop((0,0,tile.width,bottom[0]))
+                array=np.asarray(tile);white=np.all(array>=245,axis=2)
+                nonwhite=np.flatnonzero(white.mean(axis=0)<.99)
+                if len(nonwhite):tile=tile.crop((int(nonwhite[0]),0,int(nonwhite[-1])+1,tile.height))
+                if min(tile.size)<32:raise ValueError("Reference grid produced an empty or too-small view")
+                target=directory/f"view_{row*columns+column:02d}.png"
+                tile.save(target);outputs.append(str(target.resolve()))
+    return outputs

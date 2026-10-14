@@ -23,6 +23,17 @@ class SAM2Segmenter:
         try: from sam2.build_sam import build_sam2_video_predictor
         except ImportError as e: raise RuntimeError("Install the official SAM 2 package (facebookresearch/sam2) in the runtime environment.") from e
         if not Path(checkpoint).is_file(): raise FileNotFoundError(f"SAM 2 checkpoint not found: {checkpoint}")
+        self.device=device
+        import torch
+        from contextlib import nullcontext
+        gpu=str(device).startswith('cuda')
+        dtype=torch.bfloat16 if gpu and torch.cuda.is_bf16_supported() else torch.float16
+        self._inference_context=torch.inference_mode
+        self._precision_context=(lambda:torch.autocast('cuda',dtype=dtype)) if gpu else nullcontext
+        # SAM2 1.0's attention defaults can exclude the FP32 math fallback on
+        # Ampere with modern PyTorch. This is also the official Wan workaround.
+        import sam2.modeling.sam.transformer as attention
+        attention.MATH_KERNEL_ON=True
         self.predictor=build_sam2_video_predictor(config,checkpoint,device=device)
 
     def segment_video(self, frames, frame_index: int, bbox: tuple[int,int,int,int], object_id: int = 1, chunk_frames: int = 32):
@@ -33,18 +44,28 @@ class SAM2Segmenter:
         Fully lost targets at a window boundary require user reinitialization.
         """
         import tempfile, cv2
+        from contextlib import nullcontext
         from .frame_store import FrameStore
         if not frames or not 0<=frame_index<len(frames):raise ValueError("SAM seed frame is outside the shot")
         if chunk_frames<2:raise ValueError("SAM chunk_frames must be at least 2")
         zero=np.zeros(frames[0].shape[:2],np.uint8)
         masks=FrameStore.from_frames(zero for _ in range(len(frames)))
         def window(start,end,seed,box=None,mask=None,directions=(False,)):
-            with tempfile.TemporaryDirectory(prefix="genjutsu_sam2_") as td:
+            inference=getattr(self,'_inference_context',nullcontext)()
+            precision=getattr(self,'_precision_context',nullcontext)()
+            with inference,precision,tempfile.TemporaryDirectory(prefix="genjutsu_sam2_") as td:
                 for i in range(start,end):
                     cv2.imwrite(str(Path(td)/f"{i-start:06d}.jpg"),cv2.cvtColor(frames[i],cv2.COLOR_RGB2BGR))
                 state=self.predictor.init_state(video_path=td,offload_video_to_cpu=True,offload_state_to_cpu=True)
                 if box is not None:
-                    self.predictor.add_new_points_or_box(inference_state=state,frame_idx=seed,obj_id=object_id,box=np.array(box,dtype=np.float32))
+                    method=getattr(self.predictor,'add_new_points_or_box',None)
+                    if method is not None:
+                        method(inference_state=state,frame_idx=seed,obj_id=object_id,box=np.array(box,dtype=np.float32))
+                    else:
+                        # Official SAM2 1.0 names this API add_new_points and
+                        # represents box corners using SAM point labels 2/3.
+                        self.predictor.add_new_points(inference_state=state,frame_idx=seed,obj_id=object_id,
+                            points=np.array(box,dtype=np.float32).reshape(2,2),labels=np.array([2,3],dtype=np.int32))
                 else:
                     if not np.any(mask):raise RuntimeError("SAM target lost at chunk boundary; reinitialize the target or shorten selection.chunk_frames")
                     self.predictor.add_new_mask(inference_state=state,frame_idx=seed,obj_id=object_id,mask=mask>0)

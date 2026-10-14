@@ -1,5 +1,44 @@
 # Validation report
 
+## Surgical implementation validation — 2026-10-15 Malaysia time
+
+### Approved 20-step identity test: failed quality acceptance
+
+Prompt `b2700d3f-11ff-44e4-9ff3-9dec68d3a58f` completed all **20/20 denoising steps**; total request duration was **519.37 seconds**, including preprocessing/checkpoint verification/load. Inputs were five CFR frames at **144×256**, source audio, the supplied six-view face sheet split into individual photos, seed 1234, BF16 transformer and FP32 VAE. Corrected pose/mask/background geometry passed the actual input validator.
+
+InsightFace detected **zero target faces in five generated frames**. All scores were zero, failing the unchanged .55 every-frame threshold. Direct inspection of the real contact sheet shows severe black/magenta face corruption. The test is **rejected**, not a successful identity replacement; no accepted final video was published. No additional quality candidate or larger render was run.
+
+The rejected candidate was retained as lossless disk-backed frames. A separately labeled `CharacterSwap_identity_rejected_preview.mp4` was composited only for inspection: five decoded frames at 144×256, source audio present, timestamps matching within 1 ms. This review export does not convert the failed generation into an accepted output. The cause of corruption is not isolated; minimum-resolution generation and narrowly selected face conditioning remain unqualified. A larger short-clip test requires new user approval.
+
+Added a numeric-output safeguard after inspection: reject non-finite model pixels instead of silently casting them to black. Animate requests the SDK's supported NumPy output to expose float pixels before conversion. The guard is regression-tested; no assertion is made that non-finite values caused this particular failed render, and no additional GPU render was performed after adding it.
+
+- Final Windows regression run: **66 passed, five upstream Gradio/Starlette deprecation warnings, 66.61 seconds**. No tests failed or were skipped. Test environment remains `.venv-local`. Python compilation, JavaScript module syntax check, local and Pod `pip check`, and staged whitespace checks also passed.
+- Real Animate prompt `4bd774e0-8cd1-4cd1-8ab9-baf3c927d2de` completed in 504.31 seconds; face-only prompt `f801c4fd-3c56-4567-8618-e49a1cc31a81` completed in 536.05 seconds. Both used five frames, 144×256, 30 FPS, one step. These are real generative executions, not production-quality passes.
+- Face-only selection edits about 7–8% of pixels. Its draft identity mean was approximately **-.006**, failing the .55 every-frame cosine threshold. The older broad person draft scored mean .0682 and minimum .01398, also failing. The interface marks drafts as unaccepted and reports failed identity measurements.
+- Real Grounding DINO, SAM2, Depth Anything V2 and InsightFace executed on the short clip; five finite nonconstant depth maps and five tracked masks were inspected numerically. These short tests do not establish long occlusion or motion quality.
+- Approved Animate/preprocessing assets: 85,766,072,809 bytes, 434 files, verified by size plus publisher LFS SHA256/Git blob hashes. Animate Diffusers revision `6f4df10861c758af86ac3c979aacc1bf5c03eff0`; official preprocessing revision `cb93a225fbaf1ca100f54e79da8f994995b689b3`. Grounding DINO Tiny and Depth Anything V2 Small are also verified local checkpoints. Buffalo_l ZIP CRC/size and extracted SHA256 were checked; no publisher checksum claim is made for its ZIP.
+- Deployment repairs: restored the pinned SAM2 YAML package data, supported its older box-seeding API, enabled the official math-attention workaround with CUDA autocast, and repaired Decord wheel packaging using unchanged verified official native/FFmpeg libraries. Real Decord batch decoding and `pip check` passed. ONNX preprocessing/identity uses the available CPU provider; no ONNX CUDA-provider success is claimed.
+- Six new API workflows matched the live registered node schemas. Sidebar graphical graphs have visible-positioned nodes and connected video/report links; direct visual browser verification was unavailable. No inference quality is inferred from schema validation.
+- All **223 pre-existing package versions** matched the pre-install constraints snapshot, including the CUDA 12.8 Torch stack. `pip check` reported no broken requirements. The live server registers 22 Genjutsu nodes and serves `/extensions/ComfyUI-Genjutsu/uploads.js`.
+- Initial 20-step test submission `c26e185d-91aa-4a61-ba31-c334a59ce5fe` stopped before denoising because source-quality preprocessing inflated the tiny clip to 720×1280, mismatching selected 144×256 masks. Fixed automatic preprocessing to bound its area by source pixels, and model mask/background controls to match actual pose geometry for larger source videos. Regression added; this was an input-contract failure, not an identity candidate.
+- Added aspect-preserving reference padding after finding that the SDK stretched a landscape face tile to portrait conditioning dimensions. An approved 20-step, five-frame identity test is recorded separately below when complete. No additional quality candidates are implicitly authorized.
+- Historical sections below describe earlier environments and results; their “not run” statements are not current claims. The full 46-section specification is **not** production-accepted: long Animate shots, full recasting, operation-specific quality, restoration/upscaling, long occlusion and calibrated 3D camera recovery remain unvalidated or incomplete.
+
+## Real RunPod VACE smoke execution — 2026-10-15 Malaysia time
+
+- Pod `vsstjuepihrj5m`, RTX A6000, ComfyUI 0.30.0, Python 3.12.3, PyTorch 2.10.0+cu128, Diffusers 0.41.0. PyTorch and CUDA were not changed.
+- Approved model: `Wan-AI/Wan2.1-VACE-1.3B-diffusers`, revision `ec4d2cb062b548996b179d493fdd05340de702a1`; runtime files total 19,037,105,642 bytes, verified during deployment.
+- Installed missing `ftfy==6.3.1` without dependency upgrades. `pip check` passed and the actual Diffusers VACE `prompt_clean` function executed successfully. ComfyUI was restarted through its existing Manager endpoint. The repository Wan dependency manifests now include ftfy.
+- Submitted real GenjutsuWanVACEGenerator → GenjutsuCompositor → GenjutsuVideoOutput inference, prompt ID `d45fabfd-7544-42ae-936a-60f43ce37269`. ComfyUI recorded `execution_success` after **34 minutes 9 seconds**; no nodes were served from ComfyUI's execution cache.
+- Inputs: uploaded `source.mp4`, uploaded `reference.png`, 202 all-white grayscale PNG masks matching the source, BF16, 20 steps, seed 1234, 17-frame chunks, zero overlap and CPU model offload. All 12 inference chunks completed. The malformed additional-reference field seen in earlier user attempts was replaced with the valid empty list `[]` for this submission.
+- Final `genjutsu_full_frame_test.mp4`: **202 decoded nonconstant frames, 720×1280, rational 30 FPS, 6.733333 seconds, 6,006,123 bytes**. Source and output duration match, with decoded timestamps within 1 ms. Every output frame was decoded; minimum pixel standard deviation was 27.91.
+- Source audio is present in the final output. Decoded mono 48 kHz waveform correlation is **0.99912454**; sample-count difference is 1,182 samples (24.625 ms), below the two-AAC-packet validation limit. Sample-exact audio preservation is not claimed.
+- Public ComfyUI `/view` returned HTTP 200, `video/mp4`, and the expected byte count. Execution history, validation JSON and scripts are retained under `/workspace/genjutsu-deploy/` on the Pod.
+- This is one real full-white-mask smoke test. Direct browser visual verification was unavailable. Identity fidelity, masked background preservation, automatic SAM2 selection, overlapping-chunk temporal quality, VFR GPU inference, full multi-shot orchestration, Animate and other model subsystems remain unvalidated. All-white masks permit the entire frame to change.
+- The Windows test results below are historical; no new full local suite was run during this operational inference test.
+
+## Historical Windows baseline
+
 **Run date:** 2026-10-14 (workspace date)  
 **Platform:** Windows, Python 3.10, FFmpeg 8.0.1  
 **GPU:** NVIDIA GeForce GTX 1650 Ti, 4 GiB visible VRAM  

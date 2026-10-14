@@ -3,12 +3,12 @@ Pillow>=10
 PyYAML>=6
 requests>=2.31
 opencv-python>=4.9
-av>=16.1,<17
+av>=16.1,<19
 
 # Optional GPU inference dependencies. Install a CUDA-matched PyTorch build separately.
 # torch>=2.4
-# diffusers==0.37.1
-# transformers>=4.49,<5
-# huggingface-hub>=0.34,<1
+# diffusers>=0.41,<1
+# transformers>=4.49,<6
+# huggingface-hub>=0.34,<2
 # accelerate>=1.0
 # safetensors>=0.4

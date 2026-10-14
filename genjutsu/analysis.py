@@ -87,10 +87,16 @@ def grounded_detect(frames: list[np.ndarray], prompt: str, checkpoint: str, box_
     device="cuda" if torch.cuda.is_available() else "cpu"; model.to(device); output=[]
     from PIL import Image
     for idx,frame in enumerate(frames):
-        inputs=processor(images=Image.fromarray(frame),text=prompt,return_tensors="pt").to(device)
+        caption=prompt.strip()
+        if not caption.endswith('.'):caption+='.'
+        inputs=processor(images=Image.fromarray(frame),text=caption,return_tensors="pt").to(device)
         with torch.inference_mode(): result=model(**inputs)
-        parsed=processor.post_process_grounded_object_detection(result,inputs.input_ids,box_threshold=float(box_threshold),text_threshold=float(text_threshold),target_sizes=[(frame.shape[0],frame.shape[1])])[0]
-        output.append({"frame":idx,"detections":[{"label":str(label),"score":float(score),"box":[float(x) for x in box]} for box,score,label in zip(parsed["boxes"],parsed["scores"],parsed["text_labels"])]})
+        from inspect import signature
+        post=processor.post_process_grounded_object_detection
+        threshold_key='threshold' if 'threshold' in signature(post).parameters else 'box_threshold'
+        parsed=post(result,inputs.input_ids,**{threshold_key:float(box_threshold)},text_threshold=float(text_threshold),target_sizes=[(frame.shape[0],frame.shape[1])])[0]
+        labels=parsed.get('text_labels',parsed.get('labels',[]))
+        output.append({"frame":idx,"detections":[{"label":str(label),"score":float(score),"box":[float(x) for x in box]} for box,score,label in zip(parsed["boxes"],parsed["scores"],labels)]})
     return output
 
 def depth_sequence(frames: list[np.ndarray], model: str = "none", checkpoint: str | None = None, *, disk_backed=False) -> list[np.ndarray]:
@@ -99,10 +105,10 @@ def depth_sequence(frames: list[np.ndarray], model: str = "none", checkpoint: st
     if not checkpoint: raise RuntimeError("Depth Anything weights must already exist locally; set depth.checkpoint. This adapter never downloads weights.")
     try:
         import torch
-        from transformers import AutoImageProcessor, DepthAnythingForDepthEstimation
+        from transformers import AutoImageProcessor, AutoModelForDepthEstimation
         from PIL import Image
     except ImportError as e: raise RuntimeError("Install PyTorch and Transformers to use Depth Anything.") from e
-    processor=AutoImageProcessor.from_pretrained(checkpoint,local_files_only=True); model_obj=DepthAnythingForDepthEstimation.from_pretrained(checkpoint,local_files_only=True).eval()
+    processor=AutoImageProcessor.from_pretrained(checkpoint,local_files_only=True); model_obj=AutoModelForDepthEstimation.from_pretrained(checkpoint,local_files_only=True).eval()
     from .frame_store import FrameStore
     device="cuda" if torch.cuda.is_available() else "cpu"; model_obj.to(device); outs=FrameStore() if disk_backed else []
     with torch.inference_mode():

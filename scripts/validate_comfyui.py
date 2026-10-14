@@ -11,6 +11,10 @@ def main():
     p.add_argument("--url",default="http://127.0.0.1:8188")
     p.add_argument("--workflow-dir",default="workflows")
     p.add_argument("--assets-dir",help="Directory containing the source/reference/control files referenced by workflow inputs")
+    p.add_argument("--workflow",help="Run/check just this workflow filename (for example CharacterSwap.json)")
+    p.add_argument("--config",help="Server-local runtime YAML for the high-level workflows")
+    p.add_argument("--references-json",help="JSON array of server-local image paths or categorized reference records")
+    p.add_argument("--quality",choices=['draft','source'],default='draft')
     p.add_argument("--queue",action="store_true",help="Submit each workflow to the real server and wait for successful completion")
     p.add_argument("--timeout",type=int,default=7200)
     args=p.parse_args()
@@ -19,6 +23,7 @@ def main():
     except Exception as exc: raise SystemExit(f"Cannot query live ComfyUI /object_info at {base}: {exc}")
     root=Path(args.workflow_dir); results=[]
     for path in sorted(root.glob("*.json")):
+        if args.workflow and path.name!=args.workflow:continue
         workflow=json.loads(path.read_text(encoding="utf-8")); missing=sorted({node["class_type"] for node in workflow.values()}-nodes.keys())
         if missing:raise SystemExit(f"{path.name}: server is missing required node classes: {missing}")
         for node_id,node in workflow.items():
@@ -33,7 +38,15 @@ def main():
                 "edit_mask_directory":assets/"mask","mask_directory":assets/"mask","mask_path":assets/"mask"/"00000000.png",
                 "pose_video":assets/"src_pose.mp4","face_video":assets/"src_face.mp4","background_video":assets/"src_bg.mp4","mask_video":assets/"src_mask.mp4"}
             for node in workflow.values():
+                if node['class_type']=='GenjutsuTransform':
+                    if not args.config:raise SystemExit('High-level workflow queueing requires --config with a server-local runtime YAML')
+                    references=json.loads(args.references_json) if args.references_json else [str(assets/'reference.png')]
+                    if not isinstance(references,list) or not references:raise SystemExit('--references-json must be a nonempty JSON array')
+                    node['inputs'].update(config_path=args.config,reference_images_json=json.dumps(references),quality=args.quality,
+                        source_video=str(assets/'source.mp4'),output_path=str(assets/'output'/path.stem)+'.mp4')
+                    (assets/'output').mkdir(parents=True,exist_ok=True)
                 for key,value in list(node.get("inputs",{}).items()):
+                    if node['class_type']=='GenjutsuTransform' and key in {'config_path','reference_images_json','output_path'}:continue
                     if key in aliases and aliases[key].exists():node["inputs"][key]=str(aliases[key]);continue
                     if isinstance(value,str) and (key.endswith(("path","video","image","mask")) or "/" in value):
                         candidate=assets/Path(value).name
@@ -50,6 +63,7 @@ def main():
             if not history or not history.get("status",{}).get("completed"):raise SystemExit(f"{path.name} did not complete within {args.timeout}s (prompt {prompt_id})")
             result.update({"status":"completed_on_server","prompt_id":prompt_id})
         results.append(result)
+    if not results:raise SystemExit('No matching API workflows found')
     print(json.dumps({"server":base,"workflows":results,"queued":args.queue},indent=2))
 
 

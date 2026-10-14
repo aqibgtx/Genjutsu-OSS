@@ -18,7 +18,8 @@ def test_shipped_api_workflows_use_registered_nodes_and_valid_inputs():
         for node in graph.values():
             cls=mod.NODE_CLASS_MAPPINGS[node["class_type"]]
             required=cls.INPUT_TYPES().get("required",{})
-            assert set(node["inputs"])==set(required), f"{path.name} has stale inputs for {node['class_type']}"
+            accepted=set(required)|set(cls.INPUT_TYPES().get('optional',{}))
+            assert set(required)<=set(node['inputs'])<=accepted, f"{path.name} has stale inputs for {node['class_type']}"
 
 
 def test_cpu_temporal_and_compositor_nodes_preserve_vfr_timing(multishot_source,tmp_path):

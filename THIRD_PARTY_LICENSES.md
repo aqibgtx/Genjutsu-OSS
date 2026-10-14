@@ -28,7 +28,7 @@ This is an initial inventory for optional dependencies and integrations. It is n
 | Wan 2.2 | https://github.com/Wan-Video/Wan2.2 | Apache-2.0 per upstream repository | Upstream states model files Apache-2.0; verify exact model card |
 | Wan 2.1 VACE | https://huggingface.co/Wan-AI/Wan2.1-VACE-14B-diffusers | This adapter is Apache-2.0 | Check exact checkpoint card; do not infer from Wan 2.2 terms |
 | MediaPipe | https://github.com/google-ai-edge/mediapipe | Apache-2.0 | Model assets can carry separate notices |
-| InsightFace | https://github.com/deepinsight/insightface | MIT code | Some pretrained weights have non-commercial/restricted terms; check each model |
+| InsightFace | https://github.com/deepinsight/insightface | MIT code | Downloaded buffalo_l weights are for non-commercial research. User approved non-commercial testing only. This deployment is not qualified for commercial use of those weights. |
 | Real-ESRGAN | https://github.com/xinntao/Real-ESRGAN | BSD-3-Clause | Check selected pretrained weights separately |
 | BasicSR | https://github.com/XPixelGroup/BasicSR | Apache-2.0 | Check architectures/weights separately |
 | FFmpeg | https://ffmpeg.org/ | LGPL or GPL depending on build flags | Not applicable |

@@ -7,6 +7,18 @@ from .base import VideoBackend, BackendUnavailable
 from ..controls import ControlPackage, Operation
 from .utils import as_rgb8
 
+def animate_segment_length(configured, frame_count):
+    """Match the SDK's 4k+1 segment shape without padding a tiny test to 77."""
+    segment=min(int(configured),max(5,int(frame_count)))
+    if segment<5:raise ValueError('Animate segment_frame_length must be at least five')
+    return max(5,((segment-1)//4)*4+1)
+
+def prepare_animate_reference(path, size):
+    """Preserve face geometry when the SDK resizes to conditioning dimensions."""
+    from PIL import Image, ImageOps
+    with Image.open(path) as original:
+        return ImageOps.pad(original.convert('RGB'),size,method=Image.Resampling.LANCZOS,color=(127,127,127))
+
 class Wan22Backend(VideoBackend):
     """Wan 2.2 Animate replacement or I2V generation via Hugging Face Diffusers API."""
     name="wan22-diffusers"
@@ -30,7 +42,7 @@ class Wan22Backend(VideoBackend):
         if self._pipe is not None:return self._pipe
         try:
             import torch
-            from diffusers import WanAnimatePipeline, WanImageToVideoPipeline
+            from diffusers import AutoencoderKLWan, WanAnimatePipeline, WanImageToVideoPipeline
         except ImportError as e: raise BackendUnavailable("Wan inference requires a CUDA-compatible PyTorch and Diffusers build. Install the optional wan dependencies; weights are not downloaded by the installer.") from e
         if self.device.startswith("cuda") and not torch.cuda.is_available(): raise BackendUnavailable("Configured Wan backend requests CUDA, but torch.cuda.is_available() is false.")
         dtype=getattr(torch,self.dtype,None)
@@ -40,8 +52,9 @@ class Wan22Backend(VideoBackend):
             if key in self._PIPELINES:self._pipe=self._PIPELINES[key]; return self._pipe
         try:
             model=getattr(self,"_resolved_model_path",None) or self.model_id
-            if self.mode=="animate": self._pipe=WanAnimatePipeline.from_pretrained(model,revision=self.revision,torch_dtype=dtype,local_files_only=not self.allow_download)
-            elif self.mode=="i2v": self._pipe=WanImageToVideoPipeline.from_pretrained(model,revision=self.revision,torch_dtype=dtype,local_files_only=not self.allow_download)
+            vae=AutoencoderKLWan.from_pretrained(model,revision=self.revision,subfolder='vae',torch_dtype=torch.float32,local_files_only=not self.allow_download)
+            if self.mode=="animate": self._pipe=WanAnimatePipeline.from_pretrained(model,revision=self.revision,vae=vae,torch_dtype=dtype,local_files_only=not self.allow_download)
+            elif self.mode=="i2v": self._pipe=WanImageToVideoPipeline.from_pretrained(model,revision=self.revision,vae=vae,torch_dtype=dtype,local_files_only=not self.allow_download)
             else: raise ValueError("mode must be animate or i2v")
             if self.offload: self._pipe.enable_model_cpu_offload()
             else: self._pipe.to(self.device)
@@ -81,10 +94,14 @@ class Wan22Backend(VideoBackend):
             validate_wan_conditioning({"pose_video":pose,"face_video":face,"mask_video":mask,"background_video":background},controls.fps,len(source_frames))
             generator=torch.Generator(device=self.device).manual_seed(int(controls.settings.get("seed",0)))
             pose_frames=load_video(pose); face_frames=load_video(face)
-            kwargs={"image":Image.open(ref.path).convert("RGB"),"pose_video":pose_frames,"face_video":face_frames,"prompt":controls.prompt or "", "negative_prompt":controls.negative_prompt or "", "guidance_scale":self.guidance,"num_inference_steps":self.steps,"mode":"replace","generator":generator}
+            # The pipeline resizes its reference to conditioning dimensions.
+            # Pad first so a landscape face crop is not stretched into a
+            # portrait face, changing its geometry and identity.
+            reference_image=prepare_animate_reference(ref.path,(pose_frames[0].width,pose_frames[0].height))
+            kwargs={"image":reference_image,"pose_video":pose_frames,"face_video":face_frames,"prompt":controls.prompt or "", "negative_prompt":controls.negative_prompt or "", "guidance_scale":self.guidance,"num_inference_steps":self.steps,"mode":"replace","generator":generator,"output_type":"np"}
             kwargs["height"],kwargs["width"]=pose_frames[0].height,pose_frames[0].width
             if "segment_frame_length" in __import__("inspect").signature(pipe.__call__).parameters:
-                kwargs["segment_frame_length"]=int(controls.settings.get("segment_frame_length",77))
+                kwargs["segment_frame_length"]=animate_segment_length(controls.settings.get("segment_frame_length",77),len(source_frames))
             kwargs["background_video"]=load_video(background)
             kwargs["mask_video"]=load_video(mask)
             result=pipe(**kwargs).frames[0]

@@ -1,7 +1,8 @@
 # Install into ComfyUI's Python only when using the corresponding feature.
-diffusers==0.37.1
-transformers>=4.49,<5
-huggingface-hub>=0.34,<1
+diffusers>=0.41,<1
+transformers>=4.49,<6
+huggingface-hub>=0.34,<2
 accelerate>=1.1
 safetensors>=0.4
+ftfy>=6.3.1
 mediapipe>=0.10

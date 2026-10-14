@@ -26,7 +26,7 @@ def content_identity(path):
 
 def software_signature():
     packages = {}
-    for name in ("genjutsu-oss", "numpy", "Pillow", "av", "opencv-python", "torch", "torchvision", "diffusers", "transformers", "accelerate", "huggingface-hub", "safetensors", "sam2", "insightface"):
+    for name in ("genjutsu-oss", "numpy", "Pillow", "av", "opencv-python", "torch", "torchvision", "diffusers", "transformers", "accelerate", "huggingface-hub", "safetensors", "ftfy", "sam2", "SAM-2", "insightface", "onnxruntime", "onnxruntime-gpu", "decord", "moviepy", "hydra-core", "peft"):
         try:
             packages[name] = metadata.version(name)
         except metadata.PackageNotFoundError:

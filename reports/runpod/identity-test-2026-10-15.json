@@ -1,0 +1,50 @@
+{
+  "output": "/workspace/runpod-slim/ComfyUI/output/CharacterSwap_identity_rejected_preview.mp4",
+  "accepted": false,
+  "identity": {
+    "metric": "InsightFace normalized embedding cosine similarity",
+    "scores": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "mean": 0.0,
+    "minimum": 0.0,
+    "detected_frames": 0,
+    "total_frames": 5,
+    "threshold": 0.55,
+    "passes_threshold": false,
+    "correction_performed": false,
+    "attempts": [
+      {
+        "metric": "InsightFace normalized embedding cosine similarity",
+        "scores": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "minimum": 0.0,
+        "detected_frames": 0,
+        "total_frames": 5,
+        "threshold": 0.55,
+        "passes_threshold": false,
+        "correction_performed": false
+      }
+    ],
+    "method": "bounded measured regeneration with supported backend seed control"
+  },
+  "frames": 5,
+  "resolution": [
+    144,
+    256
+  ],
+  "audio": true,
+  "timestamps_match": true,
+  "steps": 20,
+  "status": "rejected preview only; not an accepted transformation"
+}

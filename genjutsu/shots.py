@@ -150,7 +150,7 @@ def _backend_signature(backend):
 
 
 def run_shots(frames, cuts, masks, controls, references, backend, work_dir, overrides=None, retries=1,
-              *, cache_dir=None, cache_enabled=True, prepare_shot=None):
+              *, cache_dir=None, cache_enabled=True, prepare_shot=None, validate_output=None):
     """Run independent jobs; aggregate outputs and masks on disk, never in RAM.
 
     prepare_shot performs configured automatic selection after applying each
@@ -165,8 +165,7 @@ def run_shots(frames, cuts, masks, controls, references, backend, work_dir, over
     cache_root.mkdir(parents=True, exist_ok=True)
     all_outputs, effective_masks = FrameStore(), FrameStore()
     states, any_masks, overrides = [], False, overrides or {}
-    signature = backend_signature(backend)
-    cache_enabled = cache_enabled and signature["cache_safe"]
+    signature = None
     for idx, (start, end) in enumerate(shot_ranges(len(frames), cuts)):
         local = slice_controls(controls, start, end,artifact_dir=shot_dir/f"shot_{idx:04d}_temporal")
         # Only this shot's effective settings belong in its cache identity.
@@ -225,6 +224,25 @@ def run_shots(frames, cuts, masks, controls, references, backend, work_dir, over
                     raise ValueError(f"Shot {idx} Wan Animate preprocessing needs a reference image")
                 artifacts = preprocess_wan_animate(shot_source, ref.path, shot_dir/f"shot_{idx:04d}_wan_controls", prep["wan_repo"], prep["checkpoint_dir"], int(prep.get("fps", -1)), tuple(prep.get("resolution_area", (1280, 720))))
                 local.settings.update({key: artifacts[key] for key in ("pose_video", "face_video", "background_video", "mask_video")})
+            if selected_masks is not None:
+                # Model conditioning must preserve the original body/background
+                # when selection is narrower than the official person mask.
+                mask_video=shot_dir/f'shot_{idx:04d}_selected_mask.mp4'
+                background=shot_dir/f'shot_{idx:04d}_selected_background.mp4'
+                from .video import probe_video
+                import cv2
+                pose_info=probe_video(local.settings['pose_video'])
+                size=(pose_info.width,pose_info.height)
+                # Official controls may be smaller than a 1080p source. The
+                # model's mask/background must match its pose geometry; the
+                # original masks stay at source resolution for compositing.
+                model_masks=FrameStore.from_frames(cv2.resize(mask,size,interpolation=cv2.INTER_NEAREST) for mask in selected_masks)
+                rgb_masks=FrameStore.from_frames(np.repeat(mask[...,None],3,axis=2) for mask in model_masks)
+                bg=FrameStore.from_frames(np.where(mask[...,None]>127,0,cv2.resize(frame,size,interpolation=cv2.INTER_AREA)).astype(np.uint8) for frame,mask in zip(shot_frames,model_masks))
+                timing={'timestamps':local.timestamps,'frame_durations':[float(d*Fraction(local.time_base)) for d in local.frame_durations],'time_base':local.time_base}
+                write_video(rgb_masks,mask_video,local.fps_rational,**timing)
+                write_video(bg,background,local.fps_rational,**timing)
+                local.settings['mask_video']=str(mask_video);local.settings['background_video']=str(background)
             if selected_masks is None and local.settings.get("mask_video"):
                 from .pipeline import _read_mask
                 selected_masks = _read_mask(local.settings["mask_video"], end-start, (local.height, local.width))
@@ -234,6 +252,11 @@ def run_shots(frames, cuts, masks, controls, references, backend, work_dir, over
             effective_masks.extend(selected_masks)
         else:
             effective_masks.extend(np.full((local.height, local.width), 255, np.uint8) for _ in shot_frames)
+        # Validate/create controls before hashing large generative checkpoints.
+        # A missing preprocessing asset must not burn minutes of model I/O.
+        if signature is None:
+            signature=backend_signature(backend)
+            cache_enabled=cache_enabled and signature["cache_safe"]
         key = generation_key(local, shot_frames, selected_masks, signature)
         cached = cache_root/key
         state = ShotState(idx, start, end, cache_key=key)
@@ -250,6 +273,8 @@ def run_shots(frames, cuts, masks, controls, references, backend, work_dir, over
                 out = FrameStore.open(cached)
                 if len(out) != end-start or out.shape != shot_frames[0].shape:
                     raise ValueError("Cached shot geometry/count mismatch")
+                if validate_output:
+                    out=validate_output(local,shot_frames,out,selected_masks,shot_dir/f"shot_{idx:04d}_acceptance")
                 state.status, state.output_path = "cached", str(cached)
                 all_outputs.extend(out)
                 persist()
@@ -268,6 +293,8 @@ def run_shots(frames, cuts, masks, controls, references, backend, work_dir, over
                     raise RuntimeError(f"backend returned {len(out)} frames, expected {len(shot_frames)}")
                 if any(f.shape != shot_frames[0].shape or f.dtype != np.uint8 for f in out):
                     raise RuntimeError("Backend output must match source RGB uint8 geometry")
+                if validate_output:
+                    out=validate_output(local,shot_frames,out,selected_masks,shot_dir/f"shot_{idx:04d}_acceptance")
                 if cache_enabled:
                     (cached/"complete.json").unlink(missing_ok=True)
                     stored = FrameStore.from_frames(out, cached)
@@ -278,10 +305,13 @@ def run_shots(frames, cuts, masks, controls, references, backend, work_dir, over
                 persist()
                 break
             except Exception as exc:
+                from .identity import IdentityAcceptanceError
                 last = exc
                 state.error = f"{type(exc).__name__}: {exc}"
-                state.status = "retrying" if attempt < retries else "failed"
+                terminal=isinstance(exc,IdentityAcceptanceError)
+                state.status = "retrying" if attempt < retries and not terminal else "failed"
                 persist()
+                if terminal:break
                 if attempt < retries:
                     time.sleep(min(.25*(2**attempt), 2))
         states.append(state.__dict__)

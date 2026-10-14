@@ -1,0 +1,30 @@
+# High-level real ComfyUI runtime. Supply local assets; nothing downloads implicitly.
+backend:
+  type: auto
+  animate_model_id: models/diffusers/Wan2.2-Animate-14B-Diffusers
+  vace_model_id: models/diffusers/Wan2.1-VACE-1.3B-diffusers
+  dtype: bfloat16
+  device: cuda
+  steps: 20
+  cpu_offload: true
+  allow_download: false
+  chunk_frames: 81
+  overlap_frames: 9
+  wan_animate_preprocess:
+    wan_repo: /workspace/Wan2.2
+    checkpoint_dir: /workspace/genjutsu-models/Wan2.2-Animate/process_checkpoint
+    fps: -1
+    resolution_area: [1280, 720]
+selection:
+  text_prompt: person
+  detector_model: models/grounding-dino
+  sam2_config: sam2_hiera_l.yaml
+  sam2_checkpoint: /workspace/genjutsu-models/Wan2.2-Animate/process_checkpoint/sam2/sam2_hiera_large.pt
+  chunk_frames: 32
+temporal: {enabled: true, strength: 0.15}
+compositing: {enabled: true, feather_px: 4, color_match: true}
+identity: {enabled: false, threshold: 0.55, max_correction_attempts: 2, fail_on_mismatch: true}
+evaluation: {enabled: true}
+upscale: {enabled: false}
+cache: {directory: .genjutsu-cache, enabled: true}
+processing: {chunk_frames: 81, overlap_frames: 9, shot_retries: 1, cpu_offload: true}

@@ -8,6 +8,7 @@ def as_rgb8(frame) -> np.ndarray:
     if arr.ndim!=3 or arr.shape[2]<3: raise ValueError(f"Expected RGB frame, got shape {arr.shape}")
     arr=arr[:,:,:3]
     if np.issubdtype(arr.dtype,np.floating):
-        maximum=float(np.nanmax(arr)) if arr.size else 0.0
+        if not np.isfinite(arr).all():raise ValueError('Model returned non-finite pixels; refusing to encode invalid inference as black frames')
+        maximum=float(np.max(arr)) if arr.size else 0.0
         arr=np.clip(arr*(255.0 if maximum<=1.0 else 1.0),0,255)
     return np.ascontiguousarray(arr,dtype=np.uint8)

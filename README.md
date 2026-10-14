@@ -12,6 +12,16 @@ An open-source, model-independent video transformation pipeline with ComfyUI int
 
 See [CAPABILITY_MATRIX.md](CAPABILITY_MATRIX.md) and [VALIDATION_REPORT.md](VALIDATION_REPORT.md) for tested behavior and limits.
 
+## Simple ComfyUI workflow
+
+Select **Genjutsu / CharacterSwap** in Workflows. Use its upload buttons for the source video and reference image, set target to `face` for face-only edits, and select `face_sheet_2x3` for an explicitly arranged six-photo reference sheet. Automatic detection, tracking and the four official Animate conditioning videos run internally. No manually painted masks are required by this workflow.
+
+The default `draft` renders only five frames, at most 144×256, with one inference step. It tests the pipeline and reports identity measurements; it does **not** establish production quality. `source` uses the configured steps and retains source geometry/timing, with identity acceptance enabled by default. A failed identity gate stops publication of the accepted video. Rejected candidates are retained as disk-backed frames for inspection.
+
+The six sidebar workflows use the registered `GenjutsuTransform` and `GenjutsuVideoOutput` nodes. Existing individual-node workflows remain in `workflows/advanced`. Configure `genjutsu-runtime.yaml` beside ComfyUI once; the installer supplies a local-model profile without downloading weights. FullGenjutsu requires separate categorized CHARACTER and LOCATION references and runs staged processing. It has not yet passed real full-recast acceptance.
+
+Current real evidence: Wan Animate automatic preprocessing and five-frame generation execute on the existing RTX A6000 Pod; the one-step previews **failed identity acceptance**. The entire 46-section specification is not yet production-validated. See the reports for limits, including CFR-only Animate and the 256-frame shot bound.
+
 ## Install on Windows
 
 Install Python 3.10+ and FFmpeg (`ffmpeg` and `ffprobe` on `PATH`), then create an isolated environment:
@@ -24,7 +34,7 @@ python -m pip install -e ".[video,ui,api,test]"
 python install.py --check
 ```
 
-For Wan, install a PyTorch build matching your CUDA runtime first, then `python -m pip install -e ".[wan]"`. The tested API target is Diffusers 0.37.1 with Transformers 4.x. This installs Python code only, not model weights.
+For Wan, install a PyTorch build matching your CUDA runtime first, then `python -m pip install -e ".[wan]"`. Real Pod execution uses Diffusers 0.41.0, Transformers 5.17.0 and PyTorch 2.10.0+cu128. Preserve an existing ComfyUI CUDA environment with pip constraints instead of upgrading its Torch stack. This installs Python code only, not model weights.
 
 Install custom nodes with `python install.py --comfyui-path C:\ComfyUI`, then restart ComfyUI. Workflow paths must refer to files accessible to the ComfyUI process.
 
@@ -61,6 +71,14 @@ The supplied Wan VACE profile uses the 1.3B checkpoint variant, float16, and CPU
 Run the UI with `genjutsu ui --config config.yaml`. It supports uploads, references, text target selection, per-shot JSON overrides, and optional masks; it does not ask users to create Wan conditioning videos. Start the developer API with `genjutsu api`; see [docs/API.md](docs/API.md).
 
 ## Linux / GPU deployment
+
+### Verified RunPod ComfyUI smoke test
+
+One real Wan2.1 VACE 1.3B Full Frame Test completed on an RTX A6000 with ComfyUI 0.30.0, Diffusers 0.41.0 and PyTorch 2.10.0+cu128. The 202-frame 720×1280 output retained 30 FPS timestamps and source audio. See [VALIDATION_REPORT.md](VALIDATION_REPORT.md) for exact settings and boundaries; other GPU features remain unverified.
+
+Wan prompt processing requires `ftfy`, now included in the Wan dependency manifests. For the existing tested Pod it was installed with `python -m pip install --no-deps ftfy==6.3.1`, followed by `pip check` and a ComfyUI restart. Do not apply the repository's older dependency pins over an existing CUDA environment without checking compatibility.
+
+The prepared graphical workflow appears as **Genjutsu / Wan VACE 1.3B - Full Frame Test** in that Pod's server-backed Workflows sidebar. It uses one all-white mask per decoded source frame, which allows changes anywhere in the frame. For selective editing, use target-shaped masks instead. The six repository workflows are API JSON; installation alone does not open them on the canvas.
 
 Use Python 3.10+, FFmpeg, and PyTorch matched to the host CUDA runtime. Install with `pip install -e ".[video,api]"`, then install the selected model runtime and place weights on local storage. The same CLI/config applies. Set device, dtype, chunk overlap, cache, and ComfyUI URL for the host. Do not include private credentials or large weights in the repository.
 

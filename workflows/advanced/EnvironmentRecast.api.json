@@ -1,0 +1,29 @@
+{
+  "1": {
+    "class_type": "GenjutsuWanVACEGenerator",
+    "inputs": {
+      "source_video": "input/source.mp4",
+      "reference_image": "input/environment_reference.jpg",
+      "additional_reference_images_json": "[]",
+      "edit_mask_directory": "input/full_frame_masks",
+      "prompt": "Recast the environment to match the supplied location reference while preserving the original subject motion, timing and camera.",
+      "negative_prompt": "",
+      "model_id": "Wan-AI/Wan2.1-VACE-1.3B-diffusers",
+      "dtype": "float16",
+      "output_path": "output/environment_recast.mp4",
+      "seed": 0,
+      "steps": 30,
+      "chunk_frames": 81,
+      "overlap_frames": 9
+    }
+  },
+  "2": {
+    "class_type": "GenjutsuVideoOutput",
+    "inputs": {
+      "video_path": [
+        "1",
+        0
+      ]
+    }
+  }
+}

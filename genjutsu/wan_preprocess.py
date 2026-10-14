@@ -22,6 +22,11 @@ OUTPUTS = {
     "mask_video": "src_mask.mp4",
 }
 
+def conditioning_area(resolution_area,width,height):
+    """Keep the requested model area bounded by actual source pixels."""
+    if int(resolution_area[0])*int(resolution_area[1])>width*height:return (width,height)
+    return tuple(map(int,resolution_area))
+
 
 def _sha256_file(path: Path) -> str:
     digest=hashlib.sha256()
@@ -76,11 +81,15 @@ def preprocess_wan_animate(source: str | Path, reference: str | Path, output_dir
     for path in (source, reference, *required):
         if not path.exists():
             raise FileNotFoundError(f"Wan Animate preprocessing dependency is missing: {path}")
+    # Upstream interprets this as a target area and can upscale even a tiny
+    # source. Do not inflate a low-resolution acceptance clip to 720p.
+    source_info=probe_video(source)
+    resolution_area=conditioning_area(resolution_area,source_info.width,source_info.height)
     output = Path(output_dir).resolve()
     output.mkdir(parents=True, exist_ok=True)
     from .cache import content_identity,software_signature
     fingerprint={"source":_sha256_file(source),"reference":_sha256_file(reference),
-        "preprocessor_source":content_identity(script.parent),"checkpoint_files":[(str(p.relative_to(ckpt)),_sha256_file(p)) for p in required[1:]],"software":software_signature(),
+        "preprocessor_source":content_identity(script.parent),"checkpoint_files":[(str(p.relative_to(ckpt)),content_identity(p)) for p in required[1:]],"software":software_signature(),
         "fps":fps,"resolution_area":list(resolution_area)}
     fingerprint["key"]=hashlib.sha256(json.dumps(fingerprint,sort_keys=True).encode()).hexdigest()
     existing={name:str(output/filename) for name,filename in OUTPUTS.items()}
