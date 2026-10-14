@@ -1,0 +1,16 @@
+backend:
+  type: comfyui
+  url: http://127.0.0.1:8188
+  workflow: null
+  timeout: 3600
+segmentation: { model: opencv, checkpoint: null, device: auto }
+tracking: { model: opencv, device: auto }
+depth: { model: none, checkpoint: null, device: auto }
+pose: { model: none, checkpoint: null, device: auto }
+optical_flow: { model: opencv, device: auto }
+identity: { enabled: false, model: insightface, threshold: 0.55 }
+temporal: { enabled: true, strength: 0.4, smoothing_strength: 0.25, repair_strength: 0.25 }
+compositing: { enabled: true, feather_px: 8, color_match: false }
+upscale: { enabled: false, model: realesrgan, scale: 2 }
+cache: { directory: .genjutsu-cache, enabled: true }
+processing: { chunk_frames: 81, overlap_frames: 9, low_vram: false, cpu_offload: true }

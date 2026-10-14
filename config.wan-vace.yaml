@@ -1,0 +1,14 @@
+backend:
+  type: wan_vace
+  model_id: Wan-AI/Wan2.1-VACE-1.3B-diffusers
+  device: cuda
+  dtype: float16
+  steps: 30
+  guidance: 5.0
+  cpu_offload: true
+  allow_download: false
+  chunk_frames: 81
+  overlap_frames: 9
+processing: { chunk_frames: 81, overlap_frames: 9, low_vram: true, cpu_offload: true }
+temporal: { enabled: true, strength: 0.15, smoothing_strength: 0.25, repair_strength: 0.25 }
+compositing: { enabled: true, feather_px: 8, color_match: false }

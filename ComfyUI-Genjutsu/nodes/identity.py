@@ -1,0 +1,1 @@
+from genjutsu_comfy_nodes.core import GenjutsuIdentityScore

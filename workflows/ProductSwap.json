@@ -1,0 +1,4 @@
+{
+  "1": {"class_type": "GenjutsuWanVACEGenerator", "inputs": {"source_video": "input/product_ad.mp4", "reference_image": "input/product_reference.jpg", "additional_reference_images_json": "[]", "edit_mask_directory": "input/product_masks", "prompt": "Replace only the masked product with the supplied product reference. Preserve the original commercial, camera, lighting and all unmasked pixels.", "negative_prompt": "", "model_id": "Wan-AI/Wan2.1-VACE-1.3B-diffusers", "dtype": "float16", "output_path": "output/product_swap.mp4", "seed": 0, "steps": 30, "chunk_frames": 81, "overlap_frames": 9}},
+  "2": {"class_type": "GenjutsuVideoOutput", "inputs": {"video_path": ["1", 0]}}
+}
