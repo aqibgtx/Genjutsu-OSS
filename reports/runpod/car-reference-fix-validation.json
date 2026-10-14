@@ -1,0 +1,61 @@
+{
+  "status": "real draft execution passed; visual car-design acceptance not established",
+  "prompt_id": "29a4eea5-16df-4949-9867-48628655cbf7",
+  "steps": 1,
+  "references": 6,
+  "frames": 5,
+  "resolution": [
+    144,
+    256
+  ],
+  "fps_rational": "30",
+  "duration": 0.16666666666666666,
+  "audio_present": true,
+  "source_audio_presence_matched": true,
+  "timestamps_match": true,
+  "shots": [
+    {
+      "index": 0,
+      "start": 0,
+      "end": 5,
+      "status": "complete",
+      "attempts": 1,
+      "cache_key": "6f6a32d1b964ff1fb1d3fcff0a9ff522e9f5a1292064f67d406d02993b117ed6",
+      "error": null,
+      "output_path": "/workspace/runpod-slim/ComfyUI/output/genjutsu-cache/generated/6f6a32d1b964ff1fb1d3fcff0a9ff522e9f5a1292064f67d406d02993b117ed6"
+    }
+  ],
+  "evaluation": {
+    "identity": {
+      "status": "not_measured",
+      "reason": "No local identity evaluation configured"
+    },
+    "background_preservation": {
+      "mean_absolute_error_8bit": 0.0,
+      "measured_channel_samples": 434367
+    },
+    "motion": {
+      "mean_flow_endpoint_difference_pixels": 0.6945438235998154,
+      "method": "Farneback source/output diagnostic, not semantic motion acceptance"
+    },
+    "temporal": {
+      "mean_flow_warp_rgb_error": 0.04488320741802454
+    },
+    "camera": {
+      "mean_affine_translation_difference_pixels": 0.9720062387253003,
+      "method": "2D RANSAC affine diagnostic"
+    },
+    "object_similarity": {
+      "status": "not_measured",
+      "reason": "Requires a configured learned reference evaluator"
+    },
+    "prompt_alignment": {
+      "status": "not_measured",
+      "reason": "Requires a configured text/image evaluator"
+    },
+    "perceptual_quality": {
+      "status": "not_measured",
+      "reason": "Execution/media checks do not establish perceptual quality"
+    }
+  }
+}

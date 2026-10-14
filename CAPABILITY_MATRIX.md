@@ -13,13 +13,14 @@ This table supersedes the historical Windows-only runtime statuses below. A succ
 | Depth | Real execution passed on short fixture | Depth Anything V2 Small produced five finite nonconstant maps. This does not qualify depth-ordered occlusion quality. |
 | Wan Animate replacement | Real one-step inference completed; identity failed | Five 144×256 frames through preprocessing, generation, temporal repair, compositing and audio export. Face-only preview mean cosine about -.006; strict threshold .55 not reached. |
 | Twenty-step identity acceptance | **Failed real GPU quality test** | Five 144×256 frames, 20/20 steps completed; all target scores zero, no target faces detected. Actual face corruption inspected. Strict gate rejected publication; larger short-clip test remains pending approval. |
+| VACE multi-reference short masks | Actual CPU/CUDA checks and six-reference GPU draft passed | SDK reference-prefix truncation repaired without discarding references. Twenty real mask-packing cases passed. Actual six-reference ObjectSwap completed five 144×256 frames, one step, audio/timing retained, no tensor error. Draft car-design/logo quality is not accepted. |
 | Identity measurement and gate | Real scoring executed; desired identity not accepted | Local buffalo_l, multi-reference embedding, every-frame threshold, bounded real-seed corrections, final gate. Licensed for non-commercial research testing. |
 | Character/motion routing | Implemented; CharacterSwap executed | Routes to Animate and requires actual conditioning. No silent VACE substitute. Motion-transfer quality remains untested. |
 | Product/object/outfit/environment routes | Implemented; quality untested | VACE with selected masks; environment preserves selected subject using inverse mask. Operation-specific reference assets and real acceptance runs are still required. |
 | Full recasting | Implemented staged path; GPU untested | Requires categorized character/location references; environment→character→props stages. STYLE reference handling and full specification-level recast acceptance remain incomplete. |
 | Restoration/upscaling | Implemented optional paths; learned execution untested | GFPGAN, Real-ESRGAN; explicit local weights required. Lanczos available. RIFE is not implemented. |
 | Long Animate processing | Incomplete | Explicit CFR requirement and 256-frame per-shot bound. Unlimited temporal chunking is not implemented. |
-| Local regressions | 66 passed | Uploads, PTS/audio, masks, shots, caches, memory, reference splitting/padding, bounded conditioning area, small Animate segments, retaining rejected candidates and refusing non-finite pixels. CPU tests do not validate generative quality. |
+| Local regressions | 75 passed | Uploads, PTS/audio, masks, shots, caches, memory, reference splitting/padding, bounded conditioning area, small Animate segments, retaining rejected candidates, refusing non-finite pixels and multi-reference VACE mask padding. CPU tests do not validate generative quality. |
 
 Executable tests, exact assets and failure criteria: [RUNPOD_VALIDATION.md](RUNPOD_VALIDATION.md).
 

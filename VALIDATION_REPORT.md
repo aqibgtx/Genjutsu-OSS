@@ -1,5 +1,15 @@
 # Validation report
 
+## Six-reference VACE short-draft fix — 2026-10-15
+
+- User's ObjectSwap draft failed at the real Diffusers `conditioning_latents`/mask concatenation: expected eight temporal latent frames, received four. Five source frames encode to two latent frames; six references require six additional zero-mask frames. The installed SDK allocated its zero prefix from a two-frame slice, truncating it to two instead of six. Upstream implementation: [Diffusers VACE source](https://raw.githubusercontent.com/huggingface/diffusers/v0.41.0/src/diffusers/pipelines/wan/pipeline_wan_vace.py).
+- Added a narrow Genjutsu compatibility override for `prepare_masks`: allocate the exact reference prefix while retaining upstream mask packing, VAE, denoising, every reference and original video-mask values. Already-correct SDK results are unchanged; unknown geometry mismatches raise explicitly. No dependency/CUDA/model change or model download was performed.
+- **75 local tests passed**, five upstream deprecation warnings, **72.16 seconds**. Nine new numerical regression cases cover 0/1/2/6/13 references, short/long clips, already-correct upstream masks and unknown mismatch rejection. These tests do not simulate AI outputs.
+- Executed the installed Diffusers mask-packing method on **20 real CPU/CUDA tensor cases** with five/seventeen source frames. Exact temporal geometry, unchanged video-mask contents, zero reference prefix, dtype and device checks passed. This is actual tensor execution, not a model-quality pass. Evidence: `reports/runpod/vace-reference-mask-validation.json`; reusable command: `python scripts/validate_vace_reference_masks.py --device both`.
+- Corrected the validation run's target from the attached workflow's generic `object` to `car`, retaining all six uploaded references and its prompt. `@Image1` text is not a binding between prompt instructions and reference roles; ObjectSwap does not simultaneously recast unmasked backgrounds. Real short-draft execution is recorded below when finished.
+- Real ObjectSwap prompt **`29a4eea5-16df-4949-9867-48628655cbf7` succeeded in 100.94 seconds**, completing its one-step denoising with all six uploaded references. The shot completed on the first attempt with no tensor error. Output `ObjectSwap_reference_fix_draft.mp4` decoded to **five frames, 144×256, rational 30 FPS, .166667 seconds**, with source audio present and source timestamps matching within 1 ms. Pre-encode preserved-region MAE was zero; this does not imply lossless encoded pixels. Motion/camera diagnostics were recorded, without semantic quality claims. Evidence: `reports/runpod/car-reference-fix-validation.json`.
+- This verifies the reported execution failure is fixed. One-step draft fidelity, exact logos/text and aggressive car-design replacement have not passed visual acceptance; no source-quality or full-length car render was run.
+
 ## Surgical implementation validation — 2026-10-15 Malaysia time
 
 ### Approved 20-step identity test: failed quality acceptance

@@ -1,0 +1,146 @@
+{
+  "status": "passed",
+  "scope": "actual installed SDK tensor packing only; no VAE/denoising quality claim",
+  "cases": [
+    {
+      "device": "cpu",
+      "source_frames": 5,
+      "references": 0,
+      "upstream_temporal": 2,
+      "corrected_temporal": 2
+    },
+    {
+      "device": "cpu",
+      "source_frames": 5,
+      "references": 1,
+      "upstream_temporal": 3,
+      "corrected_temporal": 3
+    },
+    {
+      "device": "cpu",
+      "source_frames": 5,
+      "references": 2,
+      "upstream_temporal": 4,
+      "corrected_temporal": 4
+    },
+    {
+      "device": "cpu",
+      "source_frames": 5,
+      "references": 6,
+      "upstream_temporal": 4,
+      "corrected_temporal": 8
+    },
+    {
+      "device": "cpu",
+      "source_frames": 5,
+      "references": 13,
+      "upstream_temporal": 4,
+      "corrected_temporal": 15
+    },
+    {
+      "device": "cpu",
+      "source_frames": 17,
+      "references": 0,
+      "upstream_temporal": 5,
+      "corrected_temporal": 5
+    },
+    {
+      "device": "cpu",
+      "source_frames": 17,
+      "references": 1,
+      "upstream_temporal": 6,
+      "corrected_temporal": 6
+    },
+    {
+      "device": "cpu",
+      "source_frames": 17,
+      "references": 2,
+      "upstream_temporal": 7,
+      "corrected_temporal": 7
+    },
+    {
+      "device": "cpu",
+      "source_frames": 17,
+      "references": 6,
+      "upstream_temporal": 10,
+      "corrected_temporal": 11
+    },
+    {
+      "device": "cpu",
+      "source_frames": 17,
+      "references": 13,
+      "upstream_temporal": 10,
+      "corrected_temporal": 18
+    },
+    {
+      "device": "cuda",
+      "source_frames": 5,
+      "references": 0,
+      "upstream_temporal": 2,
+      "corrected_temporal": 2
+    },
+    {
+      "device": "cuda",
+      "source_frames": 5,
+      "references": 1,
+      "upstream_temporal": 3,
+      "corrected_temporal": 3
+    },
+    {
+      "device": "cuda",
+      "source_frames": 5,
+      "references": 2,
+      "upstream_temporal": 4,
+      "corrected_temporal": 4
+    },
+    {
+      "device": "cuda",
+      "source_frames": 5,
+      "references": 6,
+      "upstream_temporal": 4,
+      "corrected_temporal": 8
+    },
+    {
+      "device": "cuda",
+      "source_frames": 5,
+      "references": 13,
+      "upstream_temporal": 4,
+      "corrected_temporal": 15
+    },
+    {
+      "device": "cuda",
+      "source_frames": 17,
+      "references": 0,
+      "upstream_temporal": 5,
+      "corrected_temporal": 5
+    },
+    {
+      "device": "cuda",
+      "source_frames": 17,
+      "references": 1,
+      "upstream_temporal": 6,
+      "corrected_temporal": 6
+    },
+    {
+      "device": "cuda",
+      "source_frames": 17,
+      "references": 2,
+      "upstream_temporal": 7,
+      "corrected_temporal": 7
+    },
+    {
+      "device": "cuda",
+      "source_frames": 17,
+      "references": 6,
+      "upstream_temporal": 10,
+      "corrected_temporal": 11
+    },
+    {
+      "device": "cuda",
+      "source_frames": 17,
+      "references": 13,
+      "upstream_temporal": 10,
+      "corrected_temporal": 18
+    }
+  ]
+}

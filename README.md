@@ -14,6 +14,8 @@ See [CAPABILITY_MATRIX.md](CAPABILITY_MATRIX.md) and [VALIDATION_REPORT.md](VALI
 
 ## Simple ComfyUI workflow
 
+For a car edit, select **Genjutsu / ObjectSwap**, set target to `car`, choose reference layout `images`, upload the car photos and start with `draft`. Multiple references are passed to VACE together; text such as `@Image1` is not a reference-role binding API. ObjectSwap edits the selected car and preserves unmasked background; use EnvironmentRecast separately to change the background. Six-reference short drafts need the adapter's reference-mask padding compatibility fix, included here.
+
 Select **Genjutsu / CharacterSwap** in Workflows. Use its upload buttons for the source video and reference image, set target to `face` for face-only edits, and select `face_sheet_2x3` for an explicitly arranged six-photo reference sheet. Automatic detection, tracking and the four official Animate conditioning videos run internally. No manually painted masks are required by this workflow.
 
 The default `draft` renders only five frames, at most 144×256, with one inference step. It tests the pipeline and reports identity measurements; it does **not** establish production quality. `source` uses the configured steps and retains source geometry/timing, with identity acceptance enabled by default. A failed identity gate stops publication of the accepted video. Rejected candidates are retained as disk-backed frames for inspection.

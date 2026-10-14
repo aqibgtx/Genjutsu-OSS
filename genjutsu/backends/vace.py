@@ -10,6 +10,35 @@ from ..controls import ControlPackage
 from ..motion import scene_chunk_ranges
 from .utils import as_rgb8
 
+def repair_reference_mask_padding(prepared, video_frames, reference_count, temporal_scale=4):
+    """Repair the SDK's truncated zero prefix when refs exceed video latents.
+
+    Diffusers 0.41 slices the existing mask to create reference padding. A
+    five-frame video has two latent frames, so that slice cannot allocate six
+    reference frames. Keep the SDK's real packed video mask and allocate the
+    exact zero prefix. Correct upstream implementations are left unchanged.
+    """
+    base=(int(video_frames)+int(temporal_scale)-1)//int(temporal_scale)
+    count=int(reference_count)
+    if prepared.ndim!=5 or base<1 or count<0:raise ValueError('Invalid VACE mask geometry')
+    expected=base+count
+    if prepared.shape[2]==expected:return prepared
+    if prepared.shape[2]!=base+min(base,count):
+        raise ValueError(f'Unsupported VACE mask temporal shape: {prepared.shape[2]}, expected {expected}')
+    video_mask=prepared[:,:,-base:]
+    shape=(*prepared.shape[:2],count,*prepared.shape[3:])
+    if isinstance(prepared,np.ndarray):
+        return np.concatenate([np.zeros(shape,dtype=prepared.dtype),video_mask],axis=2)
+    import torch
+    return torch.cat([prepared.new_zeros(shape),video_mask],dim=2)
+
+class ReferenceMaskPaddingMixin:
+    """Narrow compatibility override; all encoding/denoising stays upstream."""
+    def prepare_masks(self,mask,reference_images=None,generator=None):
+        prepared=super().prepare_masks(mask,reference_images,generator)
+        count=len(reference_images[0]) if reference_images is not None else 1
+        return repair_reference_mask_padding(prepared,mask.shape[2],count,self.vae_scale_factor_temporal)
+
 class WanVACEBackend(VideoBackend):
     name="wan-vace-diffusers"
     _PIPELINES={}; _LOCK=threading.Lock()
@@ -37,7 +66,9 @@ class WanVACEBackend(VideoBackend):
         try:
             model=getattr(self,"_resolved_model_path",None) or self.model_id
             vae=AutoencoderKLWan.from_pretrained(model,revision=self.revision,subfolder="vae",torch_dtype=torch.float32,local_files_only=not self.allow_download)
-            self._pipe=WanVACEPipeline.from_pretrained(model,revision=self.revision,vae=vae,torch_dtype=dtype,local_files_only=not self.allow_download)
+            class CompatibleWanVACEPipeline(ReferenceMaskPaddingMixin,WanVACEPipeline):
+                pass
+            self._pipe=CompatibleWanVACEPipeline.from_pretrained(model,revision=self.revision,vae=vae,torch_dtype=dtype,local_files_only=not self.allow_download)
             if self.offload:self._pipe.enable_model_cpu_offload()
             else:self._pipe.to(self.device)
             self._PIPELINES[key]=self._pipe

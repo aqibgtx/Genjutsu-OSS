@@ -4,6 +4,14 @@ These commands run real implementations against already-present local weights. D
 
 ## High-level sidebar acceptance
 
+Reference-mask regression (no weights or generative inference):
+
+```bash
+python scripts/validate_vace_reference_masks.py --device both --report vace-reference-mask-validation.json
+```
+
+This executes actual installed Diffusers mask packing on CPU/CUDA for 5/17 frames with 0/1/2/6/13 references. Reference prefix must contain exactly one zero latent frame per reference, with the video mask unchanged. Any temporal count, content, dtype or device mismatch fails. For real inference, queue ObjectSwap with a five-frame draft and six local car reference images; missing frames, the reported tensor concatenation error, non-finite pixels or missing output/audio fails execution acceptance. Human car-design, logo and temporal quality acceptance remains separate.
+
 Run one workflow at a time against the existing ComfyUI server, with assets and paths on that server:
 
 ```bash
